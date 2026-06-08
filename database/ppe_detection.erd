@@ -1,0 +1,494 @@
+// PPE Detection System - Entity Relationship Diagram
+// Mahindra Manufacturing Plant Safety System
+
+// ===========================================
+// USER MANAGEMENT MODULE
+// ===========================================
+
+Table users {
+  id uuid [pk, not null, increment, note: 'Primary key']
+  email varchar(255) [unique, not null, note: 'User email for login']
+  password_hash varchar(255) [not null, note: 'Hashed password']
+  first_name varchar(100) [not null]
+  last_name varchar(100) [not null]
+  phone_number varchar(20)
+  role_id uuid [not null, ref: > roles.id, note: 'Foreign key to roles']
+  plant_id uuid [ref: > plants.id, note: 'Assigned plant (optional)']
+  is_active boolean [default: true, not null]
+  last_login timestamp
+  created_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+
+  indexes {
+    email [unique]
+    role_id
+    plant_id
+  }
+
+  note: 'System users including operators, supervisors, and administrators'
+}
+
+Table roles {
+  id uuid [pk, not null, increment]
+  name varchar(50) [unique, not null, note: 'Role name (admin, supervisor, operator, viewer)']
+  description text
+  permissions json [note: 'JSON object containing permission flags']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+
+  indexes {
+    name [unique]
+  }
+
+  note: 'User roles with granular permissions'
+}
+
+// ===========================================
+// PLANT INFRASTRUCTURE MODULE
+// ===========================================
+
+Table plants {
+  id uuid [pk, not null, increment]
+  name varchar(255) [not null, note: 'Plant name (e.g., Mumbai Production Plant)']
+  code varchar(10) [unique, not null, note: 'Plant code (e.g., MPP)']
+  location varchar(255) [not null]
+  address text
+  city varchar(100)
+  state varchar(100)
+  country varchar(100) [default: 'India']
+  timezone varchar(50) [default: 'Asia/Kolkata']
+  is_active boolean [default: true, not null]
+  total_employees int [note: 'Total number of employees']
+  operational_hours json [note: 'Operating hours configuration']
+  contact_person varchar(100)
+  contact_email varchar(255)
+  contact_phone varchar(20)
+  created_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+
+  indexes {
+    code [unique]
+    is_active
+  }
+
+  note: 'Manufacturing plants/facilities'
+}
+
+Table zones {
+  id uuid [pk, not null, increment]
+  plant_id uuid [not null, ref: > plants.id, note: 'Foreign key to plants']
+  name varchar(255) [not null, note: 'Zone name (e.g., Assembly Line A)']
+  code varchar(20) [not null, note: 'Zone code']
+  description text
+  zone_type varchar(50) [note: 'Type: production, assembly, welding, warehouse, etc.']
+  risk_level varchar(20) [note: 'low, medium, high, critical']
+  required_ppe json [note: 'Array of required PPE item IDs for this zone']
+  area_sqm decimal(10,2) [note: 'Area in square meters']
+  max_capacity int [note: 'Maximum worker capacity']
+  is_active boolean [default: true, not null]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+
+  indexes {
+    (plant_id, code) [unique]
+    plant_id
+    zone_type
+    risk_level
+  }
+
+  note: 'Zones/areas within manufacturing plants'
+}
+
+Table cameras {
+  id uuid [pk, not null, increment]
+  zone_id uuid [not null, ref: > zones.id, note: 'Foreign key to zones']
+  name varchar(255) [not null, note: 'Camera name/identifier']
+  camera_code varchar(50) [unique, not null, note: 'Unique camera code']
+  ip_address varchar(45) [note: 'Camera IP address']
+  rtsp_url varchar(512) [note: 'RTSP stream URL']
+  http_url varchar(512) [note: 'HTTP stream URL']
+  location_description text
+  position_x decimal(10,2) [note: 'X coordinate for map placement']
+  position_y decimal(10,2) [note: 'Y coordinate for map placement']
+  camera_type varchar(50) [note: 'fixed, PTZ, dome, etc.']
+  resolution varchar(20) [note: 'e.g., 1920x1080']
+  fps int [default: 30, note: 'Frames per second']
+  status varchar(20) [default: 'active', note: 'active, inactive, maintenance, error']
+  last_heartbeat timestamp [note: 'Last health check timestamp']
+  uptime_percentage decimal(5,2) [note: 'Uptime percentage']
+  ai_model_version varchar(20) [note: 'AI model version used']
+  confidence_threshold decimal(3,2) [default: 0.85, note: 'Detection confidence threshold']
+  is_active boolean [default: true, not null]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+
+  indexes {
+    camera_code [unique]
+    zone_id
+    status
+    is_active
+  }
+
+  note: 'Surveillance cameras for PPE detection'
+}
+
+// ===========================================
+// PPE ITEMS MODULE
+// ===========================================
+
+Table ppe_items {
+  id uuid [pk, not null, increment]
+  name varchar(100) [not null, note: 'PPE item name (e.g., Safety Helmet)']
+  code varchar(20) [unique, not null, note: 'Item code (e.g., HELMET)']
+  description text
+  category varchar(50) [note: 'head, hand, body, foot, face, respiratory']
+  priority varchar(20) [not null, note: 'critical, high, medium, low']
+  color_code varchar(7) [note: 'Hex color code for UI']
+  icon varchar(50) [note: 'Icon identifier']
+  is_mandatory boolean [default: true, not null]
+  compliance_weight decimal(3,2) [note: 'Weight in compliance calculation (0-1)']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+
+  indexes {
+    code [unique]
+    category
+    priority
+  }
+
+  note: 'Personal Protective Equipment items catalog'
+}
+
+// ===========================================
+// DETECTION SYSTEM MODULE
+// ===========================================
+
+Table detections {
+  id uuid [pk, not null, increment]
+  detection_code varchar(100) [unique, not null, note: 'Unique detection identifier']
+  camera_id uuid [not null, ref: > cameras.id, note: 'Camera that made detection']
+  zone_id uuid [not null, ref: > zones.id, note: 'Zone where detection occurred']
+  plant_id uuid [not null, ref: > plants.id, note: 'Plant where detection occurred']
+  timestamp timestamp [not null, default: `CURRENT_TIMESTAMP`, note: 'Detection timestamp']
+  status varchar(20) [not null, note: 'compliant, violation, warning']
+  confidence_score decimal(5,2) [not null, note: 'Overall detection confidence (0-100)']
+  person_count int [default: 1, note: 'Number of persons detected']
+  image_url varchar(512) [note: 'URL to detection image']
+  image_path varchar(512) [note: 'Server file path to image']
+  thumbnail_url varchar(512) [note: 'URL to thumbnail']
+  video_clip_url varchar(512) [note: 'URL to video clip (if available)']
+  metadata json [note: 'Additional detection metadata']
+  bbs_score decimal(5,2) [note: 'Behavior-Based Safety score']
+  processed_at timestamp [note: 'When AI processing completed']
+  reviewed_by uuid [ref: > users.id, note: 'User who reviewed detection']
+  reviewed_at timestamp [note: 'When detection was reviewed']
+  review_notes text [note: 'Review comments']
+  is_false_positive boolean [default: false, note: 'Marked as false positive']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+
+  indexes {
+    detection_code [unique]
+    camera_id
+    zone_id
+    plant_id
+    timestamp
+    status
+    (plant_id, timestamp) [name: 'idx_plant_timestamp']
+    (zone_id, timestamp) [name: 'idx_zone_timestamp']
+  }
+
+  note: 'Main PPE detection events'
+}
+
+Table detection_items {
+  id uuid [pk, not null, increment]
+  detection_id uuid [not null, ref: > detections.id, note: 'Foreign key to detections']
+  ppe_item_id uuid [not null, ref: > ppe_items.id, note: 'Foreign key to ppe_items']
+  is_detected boolean [not null, note: 'true if detected, false if missing']
+  confidence decimal(5,2) [not null, note: 'Item-specific confidence score']
+  bounding_box json [note: 'Bounding box coordinates {x, y, width, height}']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+
+  indexes {
+    detection_id
+    ppe_item_id
+    is_detected
+    (detection_id, ppe_item_id) [unique, name: 'idx_unique_detection_item']
+  }
+
+  note: 'Individual PPE items detected or missing in each detection'
+}
+
+// ===========================================
+// INCIDENT MANAGEMENT MODULE
+// ===========================================
+
+Table incidents {
+  id uuid [pk, not null, increment]
+  incident_code varchar(100) [unique, not null, note: 'Unique incident identifier']
+  detection_id uuid [not null, ref: > detections.id, note: 'Related detection']
+  plant_id uuid [not null, ref: > plants.id]
+  zone_id uuid [not null, ref: > zones.id]
+  incident_type varchar(50) [not null, note: 'ppe_violation, unsafe_behavior, near_miss, etc.']
+  severity varchar(20) [not null, note: 'low, medium, high, critical']
+  title varchar(255) [not null]
+  description text
+  root_cause text
+  corrective_action text
+  status varchar(20) [default: 'open', note: 'open, in_progress, resolved, closed']
+  assigned_to uuid [ref: > users.id, note: 'User assigned to handle incident']
+  reported_by uuid [ref: > users.id, note: 'User who reported/created incident']
+  resolved_by uuid [ref: > users.id, note: 'User who resolved incident']
+  resolved_at timestamp [note: 'When incident was resolved']
+  resolution_notes text
+  priority int [default: 0, note: 'Priority ranking']
+  due_date timestamp [note: 'Due date for resolution']
+  occurred_at timestamp [not null, note: 'When incident occurred']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+
+  indexes {
+    incident_code [unique]
+    detection_id
+    plant_id
+    zone_id
+    status
+    severity
+    assigned_to
+    (plant_id, occurred_at) [name: 'idx_plant_occurred']
+  }
+
+  note: 'Safety incidents and violations requiring action'
+}
+
+Table alerts {
+  id uuid [pk, not null, increment]
+  alert_code varchar(100) [unique, not null]
+  incident_id uuid [ref: > incidents.id, note: 'Related incident (if any)']
+  detection_id uuid [ref: > detections.id, note: 'Related detection (if any)']
+  plant_id uuid [not null, ref: > plants.id]
+  zone_id uuid [ref: > zones.id]
+  alert_type varchar(50) [not null, note: 'violation, camera_offline, system_error, threshold_breach']
+  severity varchar(20) [not null, note: 'low, medium, high, critical']
+  title varchar(255) [not null]
+  message text [not null]
+  status varchar(20) [default: 'active', note: 'active, acknowledged, resolved, dismissed']
+  acknowledged_by uuid [ref: > users.id]
+  acknowledged_at timestamp
+  resolved_at timestamp
+  recipients json [note: 'Array of user IDs to notify']
+  notification_sent boolean [default: false]
+  notification_method varchar(50) [note: 'email, sms, push, in_app']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+
+  indexes {
+    alert_code [unique]
+    incident_id
+    detection_id
+    plant_id
+    zone_id
+    status
+    alert_type
+    severity
+    created_at
+  }
+
+  note: 'System alerts and notifications'
+}
+
+// ===========================================
+// ANALYTICS & REPORTING MODULE
+// ===========================================
+
+Table reports {
+  id uuid [pk, not null, increment]
+  report_code varchar(100) [unique, not null]
+  plant_id uuid [ref: > plants.id]
+  report_type varchar(50) [not null, note: 'daily, weekly, monthly, custom, incident']
+  title varchar(255) [not null]
+  description text
+  period_start timestamp [not null]
+  period_end timestamp [not null]
+  generated_by uuid [not null, ref: > users.id]
+  status varchar(20) [default: 'pending', note: 'pending, generating, completed, failed']
+  file_path varchar(512) [note: 'Path to generated report file']
+  file_url varchar(512) [note: 'URL to download report']
+  file_format varchar(10) [note: 'pdf, excel, csv']
+  file_size_kb int
+  metrics json [note: 'Summary metrics included in report']
+  filters json [note: 'Filters applied when generating report']
+  generated_at timestamp
+  downloaded_count int [default: 0]
+  last_downloaded_at timestamp
+  expires_at timestamp [note: 'When report file will be deleted']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+
+  indexes {
+    report_code [unique]
+    plant_id
+    report_type
+    generated_by
+    status
+    (plant_id, period_start, period_end) [name: 'idx_plant_period']
+  }
+
+  note: 'Generated analytical reports'
+}
+
+Table audit_logs {
+  id uuid [pk, not null, increment]
+  user_id uuid [ref: > users.id, note: 'User who performed action']
+  action varchar(100) [not null, note: 'Action performed (create, update, delete, login, etc.)']
+  entity_type varchar(50) [not null, note: 'Type of entity affected (user, detection, incident, etc.)']
+  entity_id uuid [note: 'ID of affected entity']
+  old_values json [note: 'Previous values before change']
+  new_values json [note: 'New values after change']
+  ip_address varchar(45)
+  user_agent text
+  plant_id uuid [ref: > plants.id]
+  status varchar(20) [note: 'success, failed']
+  error_message text [note: 'Error message if action failed']
+  timestamp timestamp [default: `CURRENT_TIMESTAMP`, not null]
+
+  indexes {
+    user_id
+    entity_type
+    entity_id
+    timestamp
+    plant_id
+    (entity_type, entity_id) [name: 'idx_entity']
+    (user_id, timestamp) [name: 'idx_user_timestamp']
+  }
+
+  note: 'System audit trail for compliance and security'
+}
+
+// ===========================================
+// CONFIGURATION MODULE
+// ===========================================
+
+Table system_settings {
+  id uuid [pk, not null, increment]
+  key varchar(100) [unique, not null, note: 'Setting key']
+  value text [not null, note: 'Setting value (can be JSON)']
+  data_type varchar(20) [not null, note: 'string, number, boolean, json']
+  category varchar(50) [note: 'detection, alerts, reports, system']
+  description text
+  is_encrypted boolean [default: false]
+  is_system boolean [default: false, note: 'System settings cannot be deleted']
+  updated_by uuid [ref: > users.id]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+
+  indexes {
+    key [unique]
+    category
+  }
+
+  note: 'System-wide configuration settings'
+}
+
+Table notification_preferences {
+  id uuid [pk, not null, increment]
+  user_id uuid [not null, ref: > users.id, note: 'User preferences belong to']
+  email_enabled boolean [default: true]
+  sms_enabled boolean [default: false]
+  push_enabled boolean [default: true]
+  in_app_enabled boolean [default: true]
+  alert_severity_threshold varchar(20) [default: 'medium', note: 'Minimum severity to notify']
+  alert_types json [note: 'Array of alert types to receive']
+  quiet_hours_start time [note: 'Start of quiet hours']
+  quiet_hours_end time [note: 'End of quiet hours']
+  timezone varchar(50) [default: 'Asia/Kolkata']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+
+  indexes {
+    user_id [unique]
+  }
+
+  note: 'User notification preferences'
+}
+
+// ===========================================
+// DASHBOARD & ANALYTICS VIEWS
+// ===========================================
+
+Table dashboard_stats {
+  id uuid [pk, not null, increment]
+  plant_id uuid [not null, ref: > plants.id]
+  date date [not null, note: 'Stats date']
+  hour int [note: 'Hour of day (0-23) for hourly stats']
+  total_detections int [default: 0]
+  compliant_count int [default: 0]
+  violation_count int [default: 0]
+  warning_count int [default: 0]
+  compliance_rate decimal(5,2) [note: 'Compliance percentage']
+  bbs_score_avg decimal(5,2) [note: 'Average BBS score']
+  incidents_count int [default: 0]
+  critical_incidents_count int [default: 0]
+  cameras_active int [default: 0]
+  cameras_total int [default: 0]
+  uptime_percentage decimal(5,2)
+  unique_zones_count int [default: 0]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`, not null]
+
+  indexes {
+    plant_id
+    date
+    (plant_id, date, hour) [unique, name: 'idx_unique_plant_datetime']
+    (plant_id, date) [name: 'idx_plant_date']
+  }
+
+  note: 'Pre-calculated dashboard statistics for performance'
+}
+
+// ===========================================
+// RELATIONSHIPS SUMMARY
+// ===========================================
+//
+// User Management:
+//   users -> roles (many-to-one)
+//   users -> plants (many-to-one, optional)
+//
+// Plant Infrastructure:
+//   plants -> zones (one-to-many)
+//   zones -> cameras (one-to-many)
+//   zones -> plants (many-to-one)
+//   cameras -> zones (many-to-one)
+//
+// Detection System:
+//   detections -> cameras (many-to-one)
+//   detections -> zones (many-to-one)
+//   detections -> plants (many-to-one)
+//   detections -> users (many-to-one, for review)
+//   detection_items -> detections (many-to-one)
+//   detection_items -> ppe_items (many-to-one)
+//
+// Incident Management:
+//   incidents -> detections (many-to-one)
+//   incidents -> plants (many-to-one)
+//   incidents -> zones (many-to-one)
+//   incidents -> users (assigned_to, reported_by, resolved_by)
+//   alerts -> incidents (many-to-one, optional)
+//   alerts -> detections (many-to-one, optional)
+//   alerts -> plants (many-to-one)
+//   alerts -> zones (many-to-one, optional)
+//   alerts -> users (acknowledged_by)
+//
+// Analytics & Reporting:
+//   reports -> plants (many-to-one, optional)
+//   reports -> users (generated_by)
+//   audit_logs -> users (many-to-one, optional)
+//   audit_logs -> plants (many-to-one, optional)
+//   dashboard_stats -> plants (many-to-one)
+//
+// Configuration:
+//   system_settings -> users (updated_by)
+//   notification_preferences -> users (one-to-one)
+//
+// ===========================================
