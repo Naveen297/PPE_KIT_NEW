@@ -1,38 +1,64 @@
 /**
  * NavTabs — Dashboard / Live Monitoring navigation toggle.
+ * Light glass pill with dark readable text.
  *
  * @param {Object}   props
  * @param {'dashboard'|'live'} props.currentView - Active view key.
  * @param {(view: string) => void} props.onNavigate - Navigation callback.
  */
 const NavTabs = ({ currentView, onNavigate }) => (
-  <div className="flex items-center p-1 bg-gray-100 rounded-xl">
+  <div
+    style={{
+      background: 'rgba(0,0,0,0.07)',
+      border: '1px solid rgba(0,0,0,0.1)',
+    }}
+    className="flex items-center p-0.5 rounded-lg h-8"
+  >
     <button
       id="nav-tab-dashboard"
       onClick={() => onNavigate('dashboard')}
-      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
+      style={
         currentView === 'dashboard'
-          ? 'bg-white text-blue-700 shadow-sm'
-          : 'text-gray-600 hover:bg-gray-200'
+          ? {
+              background: 'rgba(255,255,255,0.95)',
+              border: '1px solid rgba(0,0,0,0.1)',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
+            }
+          : {}
+      }
+      className={`h-7 px-3 rounded-md text-xs font-semibold transition-all duration-200 focus:outline-none ${
+        currentView === 'dashboard'
+          ? 'text-blue-700'
+          : 'text-gray-600 hover:text-gray-900 hover:bg-black/5'
       }`}
     >
       Dashboard
     </button>
+
     <button
       id="nav-tab-live"
       onClick={() => onNavigate('live')}
-      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
+      style={
         currentView === 'live'
-          ? 'bg-white text-red-600 shadow-sm'
-          : 'text-gray-600 hover:bg-gray-200'
+          ? {
+              background: 'rgba(239,68,68,0.12)',
+              border: '1px solid rgba(239,68,68,0.3)',
+              boxShadow: '0 1px 4px rgba(239,68,68,0.12)',
+            }
+          : {}
+      }
+      className={`flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-semibold transition-all duration-200 focus:outline-none ${
+        currentView === 'live'
+          ? 'text-red-600'
+          : 'text-gray-600 hover:text-gray-900 hover:bg-black/5'
       }`}
     >
       <span
-        className={`w-2 h-2 rounded-full ${
+        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
           currentView === 'live' ? 'bg-red-500 animate-pulse' : 'bg-gray-400'
         }`}
       />
-      Live Monitoring
+      Live
     </button>
   </div>
 );

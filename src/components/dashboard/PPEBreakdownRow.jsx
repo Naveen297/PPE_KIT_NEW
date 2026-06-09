@@ -14,16 +14,17 @@ const PPE_DISPLAY_ITEMS = [
 ];
 
 const PPEBreakdownRow = ({ itemCounts }) => (
-  <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+  <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
     {PPE_DISPLAY_ITEMS.map(({ key, label, icon, styles }) => (
       <div
         key={key}
-        className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all duration-200 hover:shadow-md cursor-default ${styles}`}
+        className={`flex flex-col items-center justify-center py-2 px-3 rounded-xl border-2 transition-all duration-200 hover:shadow-md cursor-default ${styles}`}
       >
-        <div className="mb-1 text-2xl filter drop-shadow-sm">{icon}</div>
-        <div className="text-[10px] font-bold uppercase tracking-wider opacity-80">{label}</div>
-        <div className="mt-0.5 text-xl font-black">{itemCounts[key] ?? 0}</div>
-        <div className="text-[9px] font-medium opacity-70">Violations</div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xl filter drop-shadow-sm leading-none">{icon}</span>
+          <span className="text-xl font-black leading-none">{itemCounts[key] ?? 0}</span>
+        </div>
+        <div className="mt-1 text-[9px] font-bold uppercase tracking-wider opacity-75">{label} Violations</div>
       </div>
     ))}
   </div>

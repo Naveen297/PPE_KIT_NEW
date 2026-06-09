@@ -1,0 +1,594 @@
+================================================================================
+  SafetyAI — PPE Detection System
+  DASHBOARD PAGE API DOCUMENTATION
+  Version : v1
+  Base URL: http://localhost:5000/api/v1
+  Date    : June 2025
+================================================================================
+
+NOTE: This project has a single plant. No plantId parameter is needed
+      in any API call — the backend defaults to the configured plant.
+
+
+TABLE OF CONTENTS
+─────────────────
+  1. Dashboard KPI Stats API (Top 4 Cards + PPE Breakdown)
+  2. Incidents Over Time Chart API
+  3. Area-wise Incidents Chart API
+  4. Risk Level Chart API
+  5. Camera Uptime Chart API
+  6. Incident Type Chart API
+  7. PPE Violations Table — WebSocket / SSE (Real-Time)
+  8. Detection Detail Modal API (Action Button)
+  9. Common Response & Error Format
+
+
+================================================================================
+1. DASHBOARD KPI STATS API (Top 4 Cards + PPE Breakdown Row)
+================================================================================
+
+Used by:
+  - StatsSection → 4 KPI cards (Total Detections, Compliant, Violations, Compliance Rate)
+  - PPEBreakdownRow → 6 PPE item violation counts (Helmet, Gloves, Apron, Mobile, Shoes, Goggles)
+
+──────────────────────────────────────────────────────────────────────────
+GET  /api/v1/dashboard/stats
+──────────────────────────────────────────────────────────────────────────
+
+Description : Fetch dashboard overview statistics and PPE item breakdown
+Auth        : Bearer Token required
+
+Request:
+  Method  : GET
+  Headers :
+    Authorization : Bearer <access_token>
+  Query Params :
+    period : string (optional) — "daily" | "weekly" | "monthly" (default: "daily")
+  Body : None
+
+Example:
+  GET /api/v1/dashboard/stats?period=daily
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Dashboard stats retrieved successfully",
+  "data": {
+    "totalDetections" : 150,
+    "compliant"       : 105,
+    "violations"      : 45,
+    "complianceRate"  : 70.0,
+
+    "ppeBreakdown": {
+      "helmet"  : 6,
+      "gloves"  : 2,
+      "apron"   : 4,
+      "mobile"  : 0,
+      "shoes"   : 9,
+      "goggles" : 0
+    }
+  }
+}
+
+Field Descriptions:
+  totalDetections — Total number of PPE detections in the selected period
+  compliant       — Count of detections where all PPE items were present
+  violations      — Count of detections where one or more PPE items were missing
+  complianceRate  — (compliant / totalDetections) × 100, rounded to 1 decimal
+  ppeBreakdown    — Per-item violation counts:
+    helmet  — Number of times "Safety Helmet" was missing
+    gloves  — Number of times "Safety Gloves" were missing
+    apron   — Number of times "Safety Vest / Apron" was missing
+    mobile  — Number of times mobile phone usage was detected
+    shoes   — Number of times "Safety Boots / Shoes" were missing
+    goggles — Number of times "Safety Goggles" were missing
+
+
+================================================================================
+2. INCIDENTS OVER TIME CHART API
+================================================================================
+
+Used by: IncidentsOverTimeChart (Bar Chart — day-wise or week-wise counts)
+
+──────────────────────────────────────────────────────────────────────────
+GET  /api/v1/dashboard/charts/incidents-over-time
+──────────────────────────────────────────────────────────────────────────
+
+Description : Fetch detection counts grouped by time intervals for bar chart
+Auth        : Bearer Token required
+
+Request:
+  Method  : GET
+  Headers :
+    Authorization : Bearer <access_token>
+  Query Params :
+    viewMode  : string (required)  — "weekly" | "monthly" | "custom"
+    startDate : string (optional)  — ISO 8601 date, required when viewMode is "custom"
+    endDate   : string (optional)  — ISO 8601 date, required when viewMode is "custom"
+  Body : None
+
+Example (weekly):
+  GET /api/v1/dashboard/charts/incidents-over-time?viewMode=weekly
+
+Example (custom range):
+  GET /api/v1/dashboard/charts/incidents-over-time?viewMode=custom&startDate=2025-06-01&endDate=2025-06-07
+
+Response (200 OK) — Weekly:
+{
+  "success": true,
+  "message": "Incidents over time data retrieved successfully",
+  "data": {
+    "title"  : "Last 7 days",
+    "labels" : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    "values" : [3, 7, 5, 12, 8, 10, 6]
+  }
+}
+
+Response (200 OK) — Monthly:
+{
+  "success": true,
+  "message": "Incidents over time data retrieved successfully",
+  "data": {
+    "title"  : "Last 4 weeks",
+    "labels" : ["Week 1", "Week 2", "Week 3", "Week 4"],
+    "values" : [25, 30, 18, 22]
+  }
+}
+
+Response (200 OK) — Custom Range:
+{
+  "success": true,
+  "message": "Incidents over time data retrieved successfully",
+  "data": {
+    "title"  : "Jun 1 – Jun 7",
+    "labels" : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    "values" : [4, 8, 6, 11, 9, 7, 5]
+  }
+}
+
+
+================================================================================
+3. AREA-WISE INCIDENTS CHART API
+================================================================================
+
+Used by: AreaWiseIncidentsChart (Horizontal Bar — violations per zone)
+
+──────────────────────────────────────────────────────────────────────────
+GET  /api/v1/dashboard/charts/area-wise
+──────────────────────────────────────────────────────────────────────────
+
+Description : Fetch violation counts grouped by plant zones
+Auth        : Bearer Token required
+
+Request:
+  Method  : GET
+  Headers :
+    Authorization : Bearer <access_token>
+  Query Params :
+    period : string (optional) — "daily" | "weekly" | "monthly" (default: "monthly")
+  Body : None
+
+Example:
+  GET /api/v1/dashboard/charts/area-wise?period=monthly
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Area-wise incidents data retrieved successfully",
+  "data": [
+    { "area": "Welding Section A", "count": 12 },
+    { "area": "Assembly Line B",   "count": 9  },
+    { "area": "Paint Shop",        "count": 7  },
+    { "area": "Assembly Line A",   "count": 5  },
+    { "area": "Warehouse",         "count": 3  },
+    { "area": "Quality Control",   "count": 2  }
+  ]
+}
+
+Notes:
+  - Response is sorted by count (descending)
+  - Maximum 6 zones returned (top 6 by violation count)
+
+
+================================================================================
+4. RISK LEVEL CHART API
+================================================================================
+
+Used by: RiskLevelChart (Pie Chart — High / Medium / Under Control)
+
+──────────────────────────────────────────────────────────────────────────
+GET  /api/v1/dashboard/charts/risk-level
+──────────────────────────────────────────────────────────────────────────
+
+Description : Fetch risk level distribution based on detection severity
+Auth        : Bearer Token required
+
+Request:
+  Method  : GET
+  Headers :
+    Authorization : Bearer <access_token>
+  Query Params :
+    period : string (optional) — "daily" | "weekly" | "monthly" (default: "monthly")
+  Body : None
+
+Example:
+  GET /api/v1/dashboard/charts/risk-level?period=monthly
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Risk level data retrieved successfully",
+  "data": [
+    { "type": "High Risk",     "count": 12, "color": "#ef4444" },
+    { "type": "Medium Risk",   "count": 33, "color": "#f59e0b" },
+    { "type": "Under Control", "count": 105,"color": "#10b981" }
+  ]
+}
+
+Risk Classification Logic:
+  High Risk     — Detection has ≥ 2 missing PPE items
+  Medium Risk   — Detection has exactly 1 missing PPE item
+  Under Control — Detection is fully compliant (0 missing items)
+
+
+================================================================================
+5. CAMERA UPTIME CHART API
+================================================================================
+
+Used by: CameraUptimeChart (Pie Chart — uptime % vs downtime %)
+
+──────────────────────────────────────────────────────────────────────────
+GET  /api/v1/dashboard/charts/camera-uptime
+──────────────────────────────────────────────────────────────────────────
+
+Description : Fetch camera uptime/downtime statistics
+Auth        : Bearer Token required
+
+Request:
+  Method  : GET
+  Headers :
+    Authorization : Bearer <access_token>
+  Query Params :
+    period : string (optional) — "daily" | "weekly" | "monthly" (default: "monthly")
+  Body : None
+
+Example:
+  GET /api/v1/dashboard/charts/camera-uptime?period=monthly
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Camera uptime data retrieved successfully",
+  "data": {
+    "uptimePercent"   : 95.8,
+    "downtimePercent" : 4.2,
+    "totalHours"      : 720,
+    "uptimeHours"     : 690,
+    "downtimeHours"   : 30,
+    "totalCameras"    : 15,
+    "onlineCameras"   : 14,
+    "offlineCameras"  : 1
+  }
+}
+
+
+================================================================================
+6. INCIDENT TYPE CHART API
+================================================================================
+
+Used by: IncidentTypeChart (Horizontal Bar — counts by missing PPE item type)
+
+──────────────────────────────────────────────────────────────────────────
+GET  /api/v1/dashboard/charts/incident-type
+──────────────────────────────────────────────────────────────────────────
+
+Description : Fetch violation counts grouped by PPE item type
+Auth        : Bearer Token required
+
+Request:
+  Method  : GET
+  Headers :
+    Authorization : Bearer <access_token>
+  Query Params :
+    period : string (optional) — "daily" | "weekly" | "monthly" (default: "monthly")
+  Body : None
+
+Example:
+  GET /api/v1/dashboard/charts/incident-type?period=monthly
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Incident type data retrieved successfully",
+  "data": [
+    { "type": "PPE - No Hard Hat",       "count": 15 },
+    { "type": "PPE - No Safety Boots",   "count": 12 },
+    { "type": "PPE - No Safety Vest",    "count": 9  },
+    { "type": "PPE - No Safety Gloves",  "count": 7  },
+    { "type": "PPE - No Goggles",        "count": 4  },
+    { "type": "PPE - No Face Mask",      "count": 2  }
+  ]
+}
+
+Notes:
+  - Response is sorted by count (descending)
+  - Maximum 6 types returned
+
+
+================================================================================
+7. PPE VIOLATIONS TABLE — WEBSOCKET / SSE (Real-Time)
+================================================================================
+
+Used by: DetectionsTable (live-updating violations table at bottom of dashboard)
+
+The violations table needs real-time data pushed from the server whenever
+a new PPE detection event occurs. Two approaches are supported:
+
+──────────────────────────────────────────────────────────────────────────
+OPTION A: WebSocket (Socket.IO) — RECOMMENDED
+──────────────────────────────────────────────────────────────────────────
+
+Connection URL : ws://localhost:5000
+Transport      : Socket.IO v4
+
+--- CLIENT → SERVER ---
+
+Event: "subscribe"
+  Description : Subscribe to real-time detection events
+  When to emit: On page load
+  Payload     : None (single plant, no selection needed)
+
+--- SERVER → CLIENT ---
+
+Event: "new-detection"
+  Description : Fired every time a new PPE detection is processed
+  Payload     :
+    {
+      "id"           : "DET-1717850000-abc123xyz",
+      "timestamp"    : "09/06/2025, 10:15:30 am",
+      "location"     : "Assembly Line A",
+      "status"       : "violation",
+      "confidence"   : 92.5,
+      "ppeItems"     : ["Safety Gloves", "Safety Boots"],
+      "missingItems" : ["Safety Helmet", "Safety Vest"],
+      "imageUrl"     : "https://storage.example.com/detections/det-123.jpg"
+    }
+
+Frontend behavior:
+  - Prepend new detection to the violations table array
+  - Show only detections where status === "violation"
+  - Display latest 10 violations
+  - Table columns: Timestamp | Location | Status | Missing PPE Items | Confidence | Action
+
+──────────────────────────────────────────────────────────────────────────
+OPTION B: Server-Sent Events (SSE) — ALTERNATIVE
+──────────────────────────────────────────────────────────────────────────
+
+GET  /api/v1/detections/stream
+
+Description : Open a persistent SSE connection for real-time detection events
+Auth        : Bearer Token required
+
+Request:
+  Method  : GET
+  Headers :
+    Authorization : Bearer <access_token>
+    Accept        : text/event-stream
+  Query Params : None
+  Body         : None
+
+Response Headers:
+  Content-Type  : text/event-stream
+  Cache-Control : no-cache
+  Connection    : keep-alive
+
+Event Stream Format:
+  event: new-detection
+  data: {
+    "id"           : "DET-1717850000-abc123xyz",
+    "timestamp"    : "09/06/2025, 10:15:30 am",
+    "location"     : "Welding Section B",
+    "status"       : "violation",
+    "confidence"   : 88.3,
+    "ppeItems"     : ["Safety Gloves"],
+    "missingItems" : ["Safety Helmet", "Safety Vest", "Safety Boots"],
+    "imageUrl"     : "https://storage.example.com/detections/det-456.jpg"
+  }
+
+  event: heartbeat
+  data: { "timestamp": "2025-06-09T10:16:00Z" }
+
+Notes:
+  - Heartbeat sent every 30 seconds to keep the connection alive
+  - Client should auto-reconnect on connection loss
+
+──────────────────────────────────────────────────────────────────────────
+INITIAL LOAD — REST API (to populate the table on first page load)
+──────────────────────────────────────────────────────────────────────────
+
+GET  /api/v1/detections
+
+Description : Fetch the latest violations for the table initial render
+Auth        : Bearer Token required
+
+Request:
+  Method  : GET
+  Headers :
+    Authorization : Bearer <access_token>
+  Query Params :
+    status    : string (required)  — "violation"
+    page      : number (optional)  — default: 1
+    limit     : number (optional)  — default: 10
+    sortBy    : string (optional)  — default: "timestamp"
+    sortOrder : string (optional)  — "DESC" (default) | "ASC"
+  Body : None
+
+Example:
+  GET /api/v1/detections?status=violation&limit=10&sortOrder=DESC
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Detections retrieved successfully",
+  "data": [
+    {
+      "id"           : "DET-1717850000-abc123xyz",
+      "timestamp"    : "09/06/2025, 10:15:30 am",
+      "location"     : "Assembly Line A",
+      "status"       : "violation",
+      "confidence"   : 92.5,
+      "ppeItems"     : ["Safety Gloves", "Safety Boots"],
+      "missingItems" : ["Safety Helmet", "Safety Vest"],
+      "imageUrl"     : "https://storage.example.com/detections/det-123.jpg"
+    },
+    {
+      "id"           : "DET-1717849500-def456uvw",
+      "timestamp"    : "09/06/2025, 10:10:15 am",
+      "location"     : "Welding Section B",
+      "status"       : "violation",
+      "confidence"   : 88.3,
+      "ppeItems"     : ["Safety Gloves"],
+      "missingItems" : ["Safety Helmet", "Safety Vest", "Safety Boots"],
+      "imageUrl"     : "https://storage.example.com/detections/det-456.jpg"
+    }
+  ],
+  "pagination": {
+    "page"       : 1,
+    "limit"      : 10,
+    "total"      : 45,
+    "totalPages" : 5
+  }
+}
+
+
+================================================================================
+8. DETECTION DETAIL MODAL API (Action Button Click)
+================================================================================
+
+Used by: DetectionModal — opens when user clicks the 👁️ View button in the table
+
+──────────────────────────────────────────────────────────────────────────
+GET  /api/v1/detections/:id
+──────────────────────────────────────────────────────────────────────────
+
+Description : Fetch full details of a single detection event for the modal
+Auth        : Bearer Token required
+
+Request:
+  Method  : GET
+  Headers :
+    Authorization : Bearer <access_token>
+  Path Params :
+    id : string (required) — Detection ID, e.g. "DET-1717850000-abc123xyz"
+  Query Params : None
+  Body         : None
+
+Example:
+  GET /api/v1/detections/DET-1717850000-abc123xyz
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Detection retrieved successfully",
+  "data": {
+    "id"           : "DET-1717850000-abc123xyz",
+    "timestamp"    : "09/06/2025, 10:15:30 am",
+    "location"     : "Assembly Line A",
+    "status"       : "violation",
+    "confidence"   : 92.5,
+    "imageUrl"     : "https://storage.example.com/detections/det-123.jpg",
+    "ppeItems"     : [
+      "Safety Gloves",
+      "Safety Boots"
+    ],
+    "missingItems" : [
+      "Safety Helmet",
+      "Safety Vest"
+    ]
+  }
+}
+
+Modal displays:
+  - Detection image (from imageUrl)
+  - Status badge (Compliant / Violation)
+  - Timestamp
+  - Location
+  - PPE Items present (green chips) + Missing items (red chips)
+  - Confidence score with bar and label (Excellent / Good / Fair)
+
+Error Response (404 Not Found):
+{
+  "success": false,
+  "message": "Detection not found",
+  "error"  : { "code": "NOT_FOUND" }
+}
+
+
+================================================================================
+9. COMMON RESPONSE & ERROR FORMAT
+================================================================================
+
+──────────────────────────────────────────────────────────────────────────
+SUCCESS RESPONSE ENVELOPE
+──────────────────────────────────────────────────────────────────────────
+
+{
+  "success"    : true,
+  "message"    : "Description of the operation",
+  "data"       : { ... } or [ ... ],
+  "pagination" : {                        // only for list endpoints
+    "page"       : 1,
+    "limit"      : 10,
+    "total"      : 45,
+    "totalPages" : 5
+  }
+}
+
+──────────────────────────────────────────────────────────────────────────
+ERROR RESPONSE ENVELOPE
+──────────────────────────────────────────────────────────────────────────
+
+{
+  "success" : false,
+  "message" : "Human-readable error description",
+  "error"   : {
+    "code"    : "ERROR_CODE",
+    "details" : []                       // validation errors if any
+  }
+}
+
+──────────────────────────────────────────────────────────────────────────
+HTTP STATUS CODES USED
+──────────────────────────────────────────────────────────────────────────
+
+  200 — OK                   (Successful GET request)
+  400 — Bad Request          (Missing or invalid query params)
+  401 — Unauthorized         (Missing or expired Bearer token)
+  404 — Not Found            (Detection ID not found)
+  429 — Too Many Requests    (Rate limit exceeded — 100 req / 15 min)
+  500 — Internal Server Error
+
+
+================================================================================
+  API SUMMARY TABLE
+================================================================================
+
+  #  | Method | Endpoint                                     | Purpose
+  ───+────────+──────────────────────────────────────────────+─────────────────────────────
+  1  | GET    | /api/v1/dashboard/stats                      | KPI cards + PPE breakdown
+  2  | GET    | /api/v1/dashboard/charts/incidents-over-time  | Incidents bar chart
+  3  | GET    | /api/v1/dashboard/charts/area-wise            | Area-wise violations chart
+  4  | GET    | /api/v1/dashboard/charts/risk-level           | Risk pie chart
+  5  | GET    | /api/v1/dashboard/charts/camera-uptime        | Camera uptime pie chart
+  6  | GET    | /api/v1/dashboard/charts/incident-type        | PPE type bar chart
+  7  | GET    | /api/v1/detections                            | Table initial load
+  8  | GET    | /api/v1/detections/:id                        | Modal detail view
+  9  | WS/SSE | ws://localhost:5000 → "new-detection"         | Real-time table updates
+
+  Total REST APIs : 8
+  Total WebSocket : 1 (with SSE alternative)
+
+
+================================================================================
+  END OF DOCUMENT
+================================================================================

@@ -12,7 +12,6 @@ import { StatsSection, DetectionsTable } from '@/components/dashboard';
 import {
   IncidentsOverTimeChart,
   AreaWiseIncidentsChart,
-  BBScoreChart,
   RiskLevelChart,
   CameraUptimeChart,
   IncidentTypeChart,
@@ -71,12 +70,11 @@ function AppContent() {
               <StatsSection stats={stats} detections={detections} />
             </div>
 
-            <div className="lg:col-span-5"><IncidentsOverTimeChart detections={detections} /></div>
-            <div className="lg:col-span-4"><AreaWiseIncidentsChart detections={detections} plantZones={currentPlant.zones} /></div>
-            <div className="lg:col-span-3"><BBScoreChart detections={detections} /></div>
-            <div className="lg:col-span-3"><RiskLevelChart detections={detections} /></div>
-            <div className="lg:col-span-3"><CameraUptimeChart /></div>
-            <div className="lg:col-span-6"><IncidentTypeChart detections={detections} /></div>
+            <div className="lg:col-span-6"><IncidentsOverTimeChart detections={detections} /></div>
+            <div className="lg:col-span-6"><AreaWiseIncidentsChart detections={detections} plantZones={currentPlant.zones} /></div>
+            <div className="lg:col-span-4"><RiskLevelChart detections={detections} /></div>
+            <div className="lg:col-span-4"><CameraUptimeChart /></div>
+            <div className="lg:col-span-4"><IncidentTypeChart detections={detections} /></div>
 
             <div className="lg:col-span-12">
               <DetectionsTable detections={detections} onViewDetails={handleViewDetails} />

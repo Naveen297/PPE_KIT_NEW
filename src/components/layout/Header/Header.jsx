@@ -1,10 +1,8 @@
-import { usePlant } from '@/hooks';
 import mahindraLogo from '@/assets/MAI_Logo.png';
 import NavTabs from './NavTabs';
-import PlantSelector from './PlantSelector';
 
 /**
- * Application header — branding, navigation, and report download action.
+ * Application header — glassmorphism design, compact single-row layout.
  *
  * @param {Object}   props
  * @param {() => void} props.onDownloadReport  - Opens the report download modal.
@@ -12,52 +10,92 @@ import PlantSelector from './PlantSelector';
  * @param {(view: string) => void} props.onNavigate - Navigation callback.
  */
 const Header = ({ onDownloadReport, currentView, onNavigate }) => {
-  const { currentPlant } = usePlant();
 
   return (
-    <header className="border border-gray-200 shadow-lg bg-gradient-to-r from-white via-gray-50 to-white rounded-2xl">
-      <div className="flex flex-col items-center justify-between gap-5 p-6 lg:flex-row">
-        {/* Brand */}
-        <div
-          className="flex items-center gap-4 cursor-pointer"
+    <header
+      style={{
+        background: 'rgba(255,255,255,0.75)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        border: '1px solid rgba(255,255,255,0.25)',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.3)',
+      }}
+      className="rounded-2xl"
+    >
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+
+        {/* ── Brand ── */}
+        <button
           onClick={() => onNavigate('dashboard')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === 'Enter' && onNavigate('dashboard')}
+          className="flex items-center gap-3 flex-shrink-0 focus:outline-none group"
           aria-label="Go to dashboard"
         >
-          <div className="flex justify-center items-center bg-white rounded-xl shadow-md p-1.5 border border-gray-200">
-            <img src={mahindraLogo} alt="Mahindra AI Logo" className="object-contain w-auto h-9" />
+          {/* Logo pill */}
+          <div
+            style={{
+              background: 'rgba(255,255,255,1)',
+              border: '1px solid rgba(0,0,0,0.1)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+            }}
+            className="flex items-center justify-center rounded-lg p-1.5 h-9 w-auto"
+          >
+            <img
+              src={mahindraLogo}
+              alt="Mahindra AI Logo"
+              className="h-6 w-auto object-contain"
+            />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-transparent lg:text-3xl bg-gradient-to-r from-gray-800 via-gray-900 to-blue-900 bg-clip-text">
+
+          {/* Title + badge */}
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-extrabold text-gray-900 leading-none tracking-tight">
               SafetyAI
             </h1>
-            <p className="flex items-center gap-2 mt-1 text-sm font-medium text-gray-600">
-              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-md text-xs font-semibold">
-                PPE Detection
-              </span>
-              <span className="text-xs text-gray-400 hidden sm:inline">{currentPlant.name}</span>
-            </p>
-          </div>
-        </div>
+            <span
+              style={{
+                background: 'rgba(59,130,246,0.12)',
+                border: '1px solid rgba(59,130,246,0.3)',
+              }}
+              className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold text-blue-700 uppercase tracking-widest"
+            >
+              PPE Detection
+            </span>
 
-        {/* Controls */}
-        <div className="flex flex-wrap items-center gap-4">
+          </div>
+        </button>
+
+        {/* ── Live indicator (mobile-visible shortcut) ── */}
+        {currentView === 'live' && (
+          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-red-600 sm:hidden">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+            LIVE
+          </span>
+        )}
+
+        {/* ── Controls ── */}
+        <div className="flex items-center gap-2 ml-auto">
           <NavTabs currentView={currentView} onNavigate={onNavigate} />
 
+          {/* Report button */}
           <button
             id="download-report-btn"
             onClick={onDownloadReport}
-            className="flex items-center gap-2 px-5 py-3 text-white transition-all duration-200 shadow-sm bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:shadow-md hover:scale-105"
+            title="Download Report"
+            style={{
+              background: 'linear-gradient(135deg, rgba(59,130,246,0.85) 0%, rgba(37,99,235,0.9) 100%)',
+              border: '1px solid rgba(255,255,255,0.25)',
+              boxShadow: '0 2px 8px rgba(37,99,235,0.35)',
+            }}
+            className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-white text-xs font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-400/50 whitespace-nowrap"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <span className="hidden text-sm font-semibold md:inline">Report</span>
+            <span className="hidden sm:inline">Report</span>
           </button>
 
-          <PlantSelector />
+
         </div>
       </div>
     </header>
