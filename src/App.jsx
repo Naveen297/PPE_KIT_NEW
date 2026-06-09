@@ -6,7 +6,11 @@ import { calculateStats } from '@/utils';
 import Header from '@/components/layout/Header/Header';
 
 // Dashboard
-import { StatsSection, DetectionsTable } from '@/components/dashboard';
+import {
+  StatsSection,
+  DetectionsTable,
+  DashboardSkeleton,
+} from '@/components/dashboard';
 
 // Charts
 import {
@@ -14,6 +18,7 @@ import {
   AreaWiseIncidentsChart,
   RiskLevelChart,
   CameraUptimeChart,
+  IncidentTypeChart,
 } from '@/components/charts';
 
 // Monitoring
@@ -24,37 +29,24 @@ import { DetectionModal, ReportDownloadModal } from '@/components/modals';
 
 import './App.css';
 
-/** Loading screen shown while detection data is being fetched. */
-const LoadingScreen = () => (
-  <div className="flex items-center justify-center min-h-screen">
-    <div className="text-center">
-      <div className="inline-block w-16 h-16 mb-4 border-t-4 border-b-4 border-blue-600 rounded-full animate-spin" />
-      <p className="text-xl font-semibold text-gray-700">Loading Safety Dashboard...</p>
-    </div>
-  </div>
-);
-
 /** Inner app — consumes PlantContext. */
 function AppContent() {
   const { detections, isLoading, currentPlant } = usePlant();
 
   const [selectedDetection, setSelectedDetection] = useState(null);
-  const [showReportModal, setShowReportModal]     = useState(false);
-  const [currentView, setCurrentView]             = useState('dashboard');
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [currentView, setCurrentView] = useState('dashboard');
 
-  // Stable handlers — prevent unnecessary child re-renders
-  const handleViewDetails    = useCallback((d) => setSelectedDetection(d), []);
-  const handleCloseModal     = useCallback(() => setSelectedDetection(null), []);
-  const handleOpenReport     = useCallback(() => setShowReportModal(true), []);
-  const handleCloseReport    = useCallback(() => setShowReportModal(false), []);
+  const handleViewDetails = useCallback((d) => setSelectedDetection(d), []);
+  const handleCloseModal = useCallback(() => setSelectedDetection(null), []);
+  const handleOpenReport = useCallback(() => setShowReportModal(true), []);
+  const handleCloseReport = useCallback(() => setShowReportModal(false), []);
 
   const stats = calculateStats(detections);
 
-  if (isLoading) return <LoadingScreen />;
-
   return (
-    <div className="min-h-screen p-6 bg-gray-100">
-      <div className="mx-auto">
+    <div className="min-h-screen">
+      <div className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-6">
         <Header
           onDownloadReport={handleOpenReport}
           currentView={currentView}
@@ -62,38 +54,39 @@ function AppContent() {
         />
 
         {currentView === 'live' ? (
-          <LiveMonitoring />
+          <div className="mt-6">
+            <LiveMonitoring />
+          </div>
+        ) : isLoading ? (
+          <div className="mt-6">
+            <DashboardSkeleton />
+          </div>
         ) : (
-          <div className="grid grid-cols-1 gap-5 mt-6 lg:grid-cols-12 animate-fade-in">
-            <div className="lg:col-span-12">
-              <StatsSection stats={stats} detections={detections} />
-            </div>
+          <main className="mt-6 space-y-5 animate-fade-in">
+            <StatsSection stats={stats} detections={detections} />
 
-            <section className="lg:col-span-12">
-              <div className="mb-3">
-                <h2 className="text-lg font-bold text-gray-900">Analytics Snapshot</h2>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-12">
-                <div className="xl:col-span-4">
-                  <IncidentsOverTimeChart detections={detections} compact />
+            <section aria-label="Analytics">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-12">
+                <div className="md:col-span-2 xl:col-span-8">
+                  <IncidentsOverTimeChart detections={detections} />
                 </div>
-                <div className="xl:col-span-4">
-                  <AreaWiseIncidentsChart detections={detections} plantZones={currentPlant.zones} compact />
+                <div className="md:col-span-1 xl:col-span-4">
+                  <RiskLevelChart detections={detections} />
                 </div>
-                <div className="xl:col-span-2">
-                  <RiskLevelChart detections={detections} compact />
+                <div className="md:col-span-1 xl:col-span-4">
+                  <AreaWiseIncidentsChart detections={detections} plantZones={currentPlant.zones} />
                 </div>
-                <div className="xl:col-span-2">
-                  <CameraUptimeChart compact />
+                <div className="md:col-span-1 xl:col-span-4">
+                  <IncidentTypeChart detections={detections} />
+                </div>
+                <div className="md:col-span-1 xl:col-span-4">
+                  <CameraUptimeChart />
                 </div>
               </div>
             </section>
 
-            <div className="lg:col-span-12">
-              <DetectionsTable detections={detections} onViewDetails={handleViewDetails} />
-            </div>
-          </div>
+            <DetectionsTable detections={detections} onViewDetails={handleViewDetails} />
+          </main>
         )}
       </div>
 

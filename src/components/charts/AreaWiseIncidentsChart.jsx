@@ -1,52 +1,76 @@
 import { useMemo } from 'react';
+import { Bar, BarChart, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { MapPin, Building2 } from 'lucide-react';
+import { Card, CardHeader, EmptyState } from '@/components/ui';
+import { CHART, hoverCursor } from '@/lib/chart/theme';
+import ChartTooltip from '@/lib/chart/ChartTooltip';
 
 /**
- * AreaWiseIncidentsChart — Horizontal bar chart showing violations per zone.
- * Derived from real detections data grouped by location.
- *
- * @param {Object} props
- * @param {Array}   props.detections  - Detection records.
- * @param {Array}   props.plantZones  - Zone names for the current plant.
- * @param {boolean} props.compact     - Uses a shorter card for dashboard summary rows.
+ * AreaWiseIncidentsChart — horizontal bar chart of violations per zone.
+ * Highest-incident zone is emphasized so the risk hotspot reads instantly.
  */
-const AreaWiseIncidentsChart = ({ detections, plantZones = [], compact = false }) => {
+const AreaWiseIncidentsChart = ({ detections = [], plantZones = [] }) => {
   const data = useMemo(() => {
     const counts = {};
     plantZones.forEach((z) => { counts[z] = 0; });
     detections
       .filter((d) => d.status === 'violation')
       .forEach((d) => {
-        if (d.location in counts) counts[d.location]++;
-        else counts[d.location] = (counts[d.location] ?? 0) + 1;
+        counts[d.location] = (counts[d.location] ?? 0) + 1;
       });
     return Object.entries(counts)
       .map(([area, count]) => ({ area, count }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, compact ? 5 : 6);
-  }, [compact, detections, plantZones]);
+      .slice(0, 6);
+  }, [detections, plantZones]);
 
-  const maxValue = Math.max(...data.map((d) => d.count), 1);
+  const max = Math.max(...data.map((d) => d.count), 0);
+  const hasData = data.some((d) => d.count > 0);
 
   return (
-    <div className={`h-full bg-white border border-gray-200 ${compact ? 'p-4 shadow-sm rounded-xl' : 'p-5 shadow-md rounded-2xl'}`}>
-      <h3 className="mb-3 text-sm font-bold text-gray-800">Area-wise Incidents</h3>
-      <div className={compact ? 'space-y-2' : 'space-y-3'}>
-        {data.map(({ area, count }) => (
-          <div key={area} className="flex items-center gap-3">
-            <div className={`${compact ? 'w-24' : 'w-32'} text-xs font-medium text-gray-700 truncate`}>{area}</div>
-            <div className={`relative flex-1 ${compact ? 'h-5' : 'h-7'} overflow-hidden bg-gray-100 rounded`}>
-              <div
-                className="h-full transition-all duration-500 rounded"
-                style={{ width: `${(count / maxValue) * 100}%`, background: 'linear-gradient(90deg, #1e40af 0%, #3b82f6 100%)' }}
+    <Card>
+      <CardHeader
+        title="Violations by Zone"
+        subtitle="Top hotspots across plant areas"
+        icon={<MapPin className="h-[18px] w-[18px]" />}
+      />
+      <div className="mt-4 h-[248px] w-full">
+        {hasData ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              layout="vertical"
+              data={data}
+              margin={{ top: 0, right: 28, bottom: 0, left: 4 }}
+              barCategoryGap={10}
+            >
+              <XAxis type="number" hide domain={[0, max + Math.ceil(max * 0.15) || 1]} />
+              <YAxis
+                type="category"
+                dataKey="area"
+                width={104}
+                tick={{ fill: CHART.axisLabel, fontSize: 11, fontWeight: 600 }}
+                tickLine={false}
+                axisLine={false}
               />
-              <span className="absolute text-xs font-semibold text-gray-700 transform -translate-y-1/2 right-2 top-1/2">
-                {count}
-              </span>
-            </div>
-          </div>
-        ))}
+              <Tooltip content={<ChartTooltip />} cursor={hoverCursor} />
+              <Bar dataKey="count" name="Violations" radius={[0, 6, 6, 0]} maxBarSize={20} animationDuration={650}>
+                {data.map((entry, i) => (
+                  <Cell key={i} fill={i === 0 ? CHART.brand : '#9fc0fb'} />
+                ))}
+                <LabelList
+                  dataKey="count"
+                  position="right"
+                  className="tnum"
+                  style={{ fill: CHART.axisLabel, fontSize: 11, fontWeight: 700 }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <EmptyState icon={Building2} title="No zone violations" description="All monitored areas are compliant." className="h-full" />
+        )}
       </div>
-    </div>
+    </Card>
   );
 };
 

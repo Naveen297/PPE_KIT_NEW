@@ -1,33 +1,72 @@
+import { HardHat, Hand, Shirt, Smartphone, Footprints, Glasses, Layers } from 'lucide-react';
+import { Card, CardHeader } from '@/components/ui';
+
 /**
- * PPEBreakdownRow — 6-item grid showing per-PPE-item violation counts.
- *
- * @param {Object} props
- * @param {{ helmet, gloves, apron, mobile, shoes, goggles }} props.itemCounts
+ * PPEBreakdownRow — per-PPE-item violation counts presented as enterprise tiles
+ * with contextual share-of-total bars. Data (itemCounts) is unchanged.
  */
 const PPE_DISPLAY_ITEMS = [
-  { key: 'helmet', label: 'Helmet',  icon: '⛑️', styles: 'bg-red-50 border-red-200 text-red-700' },
-  { key: 'gloves', label: 'Gloves',  icon: '🧤', styles: 'bg-blue-50 border-blue-200 text-blue-700' },
-  { key: 'apron',  label: 'Apron',   icon: '🦺', styles: 'bg-yellow-50 border-yellow-200 text-yellow-700' },
-  { key: 'mobile', label: 'Mobile',  icon: '📱', styles: 'bg-purple-50 border-purple-200 text-purple-700' },
-  { key: 'shoes',  label: 'Shoes',   icon: '👢', styles: 'bg-green-50 border-green-200 text-green-700' },
-  { key: 'goggles',label: 'Goggles', icon: '🥽', styles: 'bg-orange-50 border-orange-200 text-orange-700' },
+  { key: 'helmet', label: 'Helmet', Icon: HardHat },
+  { key: 'gloves', label: 'Gloves', Icon: Hand },
+  { key: 'apron', label: 'Vest / Apron', Icon: Shirt },
+  { key: 'mobile', label: 'Mobile', Icon: Smartphone },
+  { key: 'shoes', label: 'Safety Shoes', Icon: Footprints },
+  { key: 'goggles', label: 'Goggles', Icon: Glasses },
 ];
 
-const PPEBreakdownRow = ({ itemCounts }) => (
-  <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
-    {PPE_DISPLAY_ITEMS.map(({ key, label, icon, styles }) => (
-      <div
-        key={key}
-        className={`flex flex-col items-center justify-center py-2 px-3 rounded-xl border-2 transition-all duration-200 hover:shadow-md cursor-default ${styles}`}
-      >
-        <div className="flex items-center gap-1.5">
-          <span className="text-xl filter drop-shadow-sm leading-none">{icon}</span>
-          <span className="text-xl font-black leading-none">{itemCounts[key] ?? 0}</span>
-        </div>
-        <div className="mt-1 text-[9px] font-bold uppercase tracking-wider opacity-75">{label} Violations</div>
+const PPEBreakdownRow = ({ itemCounts }) => {
+  const counts = PPE_DISPLAY_ITEMS.map(({ key }) => itemCounts[key] ?? 0);
+  const max = Math.max(...counts, 1);
+  const total = counts.reduce((s, v) => s + v, 0);
+
+  return (
+    <Card>
+      <CardHeader
+        title="PPE Violations by Item"
+        subtitle={`${total} flagged equipment gaps across all zones`}
+        icon={<Layers className="h-[18px] w-[18px]" />}
+      />
+      <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+        {PPE_DISPLAY_ITEMS.map(({ key, label, Icon }) => {
+          const count = itemCounts[key] ?? 0;
+          const pct = Math.round((count / max) * 100);
+          const share = total > 0 ? Math.round((count / total) * 100) : 0;
+          const isTop = count === max && count > 0;
+
+          return (
+            <div
+              key={key}
+              className="group flex flex-col gap-2.5 rounded-xl border border-ink-200/70 bg-ink-50/40 p-3 transition-colors duration-200 hover:border-brand-200 hover:bg-white"
+            >
+              <div className="flex items-center justify-between">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-ink-500 shadow-xs ring-1 ring-ink-200/70 transition-colors group-hover:text-brand-600">
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <span className="tnum font-display text-xl font-extrabold leading-none text-ink-900">
+                  {count}
+                </span>
+              </div>
+
+              <div>
+                <p className="truncate text-2xs font-bold uppercase tracking-wide text-ink-500">
+                  {label}
+                </p>
+                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-ink-200/70">
+                  <div
+                    className={`h-full rounded-full transition-all duration-700 ease-out-expo ${
+                      isTop ? 'bg-rose-500' : 'bg-brand-500'
+                    }`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <p className="mt-1 text-2xs font-medium text-ink-400">{share}% of gaps</p>
+              </div>
+            </div>
+          );
+        })}
       </div>
-    ))}
-  </div>
-);
+    </Card>
+  );
+};
 
 export default PPEBreakdownRow;

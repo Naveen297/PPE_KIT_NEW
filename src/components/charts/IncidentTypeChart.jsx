@@ -1,64 +1,85 @@
 import { useMemo } from 'react';
-
-/** Derives per-item-type violation counts from real detections. */
-const INCIDENT_COLORS = ['#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6'];
+import { Bar, BarChart, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { ListChecks, CheckCircle2 } from 'lucide-react';
+import { Card, CardHeader, EmptyState } from '@/components/ui';
+import { CHART, hoverCursor } from '@/lib/chart/theme';
+import ChartTooltip from '@/lib/chart/ChartTooltip';
 
 const ITEM_LABELS = {
-  'Safety Helmet':  'PPE - No Hard Hat',
-  'Safety Gloves':  'PPE - No Safety Gloves',
-  'Safety Vest':    'PPE - No Safety Vest',
-  'Safety Boots':   'PPE - No Safety Boots',
-  'Safety Goggles': 'PPE - No Goggles',
-  'Face Mask':      'PPE - No Face Mask',
+  'Safety Helmet': 'No Hard Hat',
+  'Safety Gloves': 'No Gloves',
+  'Safety Vest': 'No Safety Vest',
+  'Safety Boots': 'No Safety Boots',
+  'Safety Goggles': 'No Goggles',
+  'Face Mask': 'No Face Mask',
 };
 
+const PALETTE = ['#2459eb', '#3b76f6', '#0ea5e9', '#22b8cf', '#14b8a6', '#5e8bf7'];
+
 /**
- * IncidentTypeChart — Horizontal bar chart showing counts by missing PPE type.
- *
- * @param {Object} props
- * @param {Array}   props.detections - Detection records.
- * @param {boolean} props.compact    - Uses a shorter card for dashboard summary rows.
+ * IncidentTypeChart — bar chart of violation counts by missing PPE type, so the
+ * most common safety gap is obvious at a glance.
  */
-const IncidentTypeChart = ({ detections, compact = false }) => {
-  const incidentTypes = useMemo(() => {
+const IncidentTypeChart = ({ detections = [] }) => {
+  const data = useMemo(() => {
     const counts = {};
     detections
       .filter((d) => d.status === 'violation')
       .forEach((d) => {
         d.missingItems?.forEach((item) => {
-          const label = ITEM_LABELS[item] ?? `PPE - No ${item}`;
+          const label = ITEM_LABELS[item] ?? item;
           counts[label] = (counts[label] ?? 0) + 1;
         });
       });
     return Object.entries(counts)
       .map(([type, count]) => ({ type, count }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, compact ? 5 : 6);
-  }, [compact, detections]);
+      .slice(0, 6);
+  }, [detections]);
 
-  const maxCount = Math.max(...incidentTypes.map((i) => i.count), 1);
+  const hasData = data.length > 0;
 
   return (
-    <div className={`h-full bg-white border border-gray-200 ${compact ? 'p-4 shadow-sm rounded-xl' : 'p-5 shadow-md rounded-2xl'}`}>
-      <h3 className="mb-3 text-sm font-bold text-gray-800">Type of Incidents</h3>
-      <div className={compact ? 'space-y-2' : 'space-y-3'}>
-        {incidentTypes.map(({ type, count }, idx) => (
-          <div key={type} className="flex items-center gap-2">
-            <div className="flex-shrink-0 w-3 h-3 rounded-full" style={{ backgroundColor: INCIDENT_COLORS[idx % INCIDENT_COLORS.length] }} />
-            <div className="flex items-center flex-1 gap-2">
-              <div className={`${compact ? 'w-24' : 'w-40'} text-xs font-medium text-gray-700 truncate`}>{type}</div>
-              <div className={`relative flex-1 ${compact ? 'h-4' : 'h-5'} overflow-hidden bg-gray-100 rounded`}>
-                <div
-                  className="h-full transition-all duration-500 rounded"
-                  style={{ width: `${(count / maxCount) * 100}%`, backgroundColor: INCIDENT_COLORS[idx % INCIDENT_COLORS.length] }}
+    <Card>
+      <CardHeader
+        title="Incident Types"
+        subtitle="Most frequent PPE gaps"
+        icon={<ListChecks className="h-[18px] w-[18px]" />}
+      />
+      <div className="mt-4 h-[248px] w-full">
+        {hasData ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 18, right: 8, bottom: 0, left: -18 }} barCategoryGap="22%">
+              <XAxis
+                dataKey="type"
+                tick={{ fill: CHART.axisLabel, fontSize: 10, fontWeight: 600 }}
+                tickLine={false}
+                axisLine={{ stroke: CHART.grid }}
+                interval={0}
+                angle={-18}
+                textAnchor="end"
+                height={48}
+              />
+              <YAxis hide allowDecimals={false} />
+              <Tooltip content={<ChartTooltip />} cursor={hoverCursor} />
+              <Bar dataKey="count" name="Violations" radius={[6, 6, 0, 0]} maxBarSize={40} animationDuration={650}>
+                {data.map((entry, i) => (
+                  <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
+                ))}
+                <LabelList
+                  dataKey="count"
+                  position="top"
+                  className="tnum"
+                  style={{ fill: CHART.axisLabel, fontSize: 11, fontWeight: 700 }}
                 />
-              </div>
-              <span className="w-8 text-xs font-semibold text-right text-gray-700">{count}</span>
-            </div>
-          </div>
-        ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <EmptyState icon={CheckCircle2} title="No violations recorded" description="No PPE gaps detected for this plant." className="h-full" />
+        )}
       </div>
-    </div>
+    </Card>
   );
 };
 

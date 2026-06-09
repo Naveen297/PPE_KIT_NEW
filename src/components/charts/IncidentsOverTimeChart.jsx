@@ -1,188 +1,274 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import {
+  Area,
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { Activity, Calendar, ChevronDown, LineChart as LineIcon } from 'lucide-react';
+import { Card, CardHeader, EmptyState } from '@/components/ui';
+import { useClickOutside } from '@/hooks';
+import { CHART, axisProps, lineCursor } from '@/lib/chart/theme';
+import ChartTooltip from '@/lib/chart/ChartTooltip';
 
-const VIEW_MODES = [
-  { id: 'weekly',  label: 'Weekly' },
-  { id: 'monthly', label: 'Monthly' },
-  { id: 'custom',  label: 'Custom' },
+const DAY_MS = 24 * 60 * 60 * 1000;
+const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+const endOfDay = (d) => { const x = new Date(d); x.setHours(23, 59, 59, 999); return x; };
+
+/** Preset → {start, end} resolver. */
+const resolvePreset = (id) => {
+  const now = new Date();
+  const today = startOfDay(now);
+  switch (id) {
+    case 'today':
+      return { start: today, end: endOfDay(now) };
+    case 'yesterday': {
+      const y = new Date(today.getTime() - DAY_MS);
+      return { start: y, end: endOfDay(y) };
+    }
+    case '7d':
+      return { start: startOfDay(new Date(now.getTime() - 6 * DAY_MS)), end: endOfDay(now) };
+    case '30d':
+      return { start: startOfDay(new Date(now.getTime() - 29 * DAY_MS)), end: endOfDay(now) };
+    case '90d':
+      return { start: startOfDay(new Date(now.getTime() - 89 * DAY_MS)), end: endOfDay(now) };
+    case 'thisMonth':
+      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: endOfDay(now) };
+    case 'lastMonth':
+      return {
+        start: new Date(now.getFullYear(), now.getMonth() - 1, 1),
+        end: endOfDay(new Date(now.getFullYear(), now.getMonth(), 0)),
+      };
+    default:
+      return { start: startOfDay(new Date(now.getTime() - 6 * DAY_MS)), end: endOfDay(now) };
+  }
+};
+
+const PRESETS = [
+  { id: 'today', label: 'Today' },
+  { id: 'yesterday', label: 'Yesterday' },
+  { id: '7d', label: 'Last 7 days' },
+  { id: '30d', label: 'Last 30 days' },
+  { id: '90d', label: 'Last 90 days' },
+  { id: 'thisMonth', label: 'This month' },
+  { id: 'lastMonth', label: 'Last month' },
+  { id: 'custom', label: 'Custom range' },
 ];
 
-/**
- * Groups detections by day-of-week, current-month weeks, or a custom range.
- */
-const buildChartData = (detections, viewMode, startDate, endDate) => {
-  if (viewMode === 'weekly') {
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const counts = Array(7).fill(0);
-    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    detections
-      .filter((d) => new Date(d.timestamp) >= oneWeekAgo)
-      .forEach((d) => { counts[new Date(d.timestamp).getDay()]++; });
-    return days.map((day, i) => ({ day, count: counts[i] }));
+/** Buckets detections within [start,end] into time-series points. */
+const buildSeries = (detections, start, end) => {
+  if (!start || !end || end < start) return [];
+  const spanDays = (endOfDay(end) - startOfDay(start)) / DAY_MS;
+
+  const fmtDay = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const fmtHour = (d) => d.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+
+  let edges = [];
+  let labelFor;
+  if (spanDays <= 1.5) {
+    // hourly across the day(s), 3-hour blocks
+    const s = startOfDay(start);
+    for (let h = 0; h < 24; h += 3) edges.push(new Date(s.getTime() + h * 60 * 60 * 1000));
+    labelFor = fmtHour;
+  } else if (spanDays <= 45) {
+    const s = startOfDay(start);
+    const n = Math.ceil(spanDays);
+    for (let i = 0; i < n; i++) edges.push(new Date(s.getTime() + i * DAY_MS));
+    labelFor = fmtDay;
+  } else {
+    const s = startOfDay(start);
+    const weeks = Math.ceil(spanDays / 7);
+    for (let i = 0; i < weeks; i++) edges.push(new Date(s.getTime() + i * 7 * DAY_MS));
+    labelFor = (d) => `${fmtDay(d)}`;
   }
 
-  if (viewMode === 'monthly') {
-    const weeks = [0, 0, 0, 0];
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  const buckets = edges.map((edge, i) => ({
+    label: labelFor(edge),
+    edge: edge.getTime(),
+    next: edges[i + 1] ? edges[i + 1].getTime() : endOfDay(end).getTime() + 1,
+    detections: 0,
+    violations: 0,
+  }));
 
-    detections
-      .filter((d) => {
-        const detectionDate = new Date(d.timestamp);
-        return detectionDate >= monthStart && detectionDate <= monthEnd;
-      })
-      .forEach((d) => {
-        const dayOfMonth = new Date(d.timestamp).getDate();
-        const weekIdx = Math.min(3, Math.floor((dayOfMonth - 1) / 7));
-        weeks[weekIdx]++;
-      });
-    return weeks.map((count, i) => ({ day: `Week ${i + 1}`, count }));
-  }
+  detections.forEach((d) => {
+    const t = new Date(d.timestamp).getTime();
+    if (Number.isNaN(t) || t < start.getTime() || t > endOfDay(end).getTime()) return;
+    const b = buckets.find((bk) => t >= bk.edge && t < bk.next);
+    if (!b) return;
+    b.detections += 1;
+    if (d.status === 'violation') b.violations += 1;
+  });
 
-  if (viewMode === 'custom' && startDate && endDate) {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const daysDiff = Math.ceil((end - start) / (24 * 60 * 60 * 1000)) + 1;
-    const filtered = detections.filter((d) => {
-      const t = new Date(d.timestamp);
-      return t >= start && t <= end;
-    });
-
-    if (daysDiff <= 7) {
-      return Array.from({ length: daysDiff }, (_, i) => {
-        const date = new Date(start);
-        date.setDate(start.getDate() + i);
-        const dayLabel = date.toLocaleDateString('en-US', { weekday: 'short' });
-        const count = filtered.filter((d) => new Date(d.timestamp).toDateString() === date.toDateString()).length;
-        return { day: dayLabel, count };
-      });
-    }
-
-    const weeks = Math.ceil(daysDiff / 7);
-    return Array.from({ length: weeks }, (_, i) => ({
-      day: `Week ${i + 1}`,
-      count: filtered.filter((d) => {
-        const daysFromStart = Math.floor((new Date(d.timestamp) - start) / (24 * 60 * 60 * 1000));
-        return daysFromStart >= i * 7 && daysFromStart < (i + 1) * 7;
-      }).length,
-    }));
-  }
-
-  return [];
+  return buckets.map(({ label, detections, violations }) => ({ label, detections, violations }));
 };
 
 /**
- * IncidentsOverTimeChart — Bar chart of detection counts over a time window.
- * Derived from real `detections` data.
- *
- * @param {Object} props
- * @param {Array}   props.detections - Detection records from context.
- * @param {boolean} props.compact    - Uses a shorter card for dashboard summary rows.
+ * IncidentsOverTimeChart — hero trend visualization. Area = total detections,
+ * line = violations, filtered by a professional preset date-range picker.
  */
-const IncidentsOverTimeChart = ({ detections, compact = false }) => {
-  const [viewMode, setViewMode]         = useState('weekly');
-  const [startDate, setStartDate]       = useState('');
-  const [endDate, setEndDate]           = useState('');
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [dateError, setDateError]       = useState(null);
+const IncidentsOverTimeChart = ({ detections = [] }) => {
+  const [preset, setPreset] = useState('7d');
+  const [open, setOpen] = useState(false);
+  const [custom, setCustom] = useState({ start: '', end: '' });
+  const ref = useClickOutside(() => setOpen(false));
+
+  const range = useMemo(() => {
+    if (preset === 'custom') {
+      if (!custom.start || !custom.end) return null;
+      return { start: startOfDay(new Date(custom.start)), end: endOfDay(new Date(custom.end)) };
+    }
+    return resolvePreset(preset);
+  }, [preset, custom]);
 
   const data = useMemo(
-    () => buildChartData(detections, viewMode, startDate, endDate),
-    [detections, viewMode, startDate, endDate],
+    () => (range ? buildSeries(detections, range.start, range.end) : []),
+    [detections, range],
   );
 
-  const maxValue = data.length > 0 ? Math.max(...data.map((d) => d.count), 1) : 1;
+  const totals = useMemo(
+    () =>
+      data.reduce(
+        (acc, d) => ({ det: acc.det + d.detections, viol: acc.viol + d.violations }),
+        { det: 0, viol: 0 },
+      ),
+    [data],
+  );
 
-  const getTitle = () => {
-    if (viewMode === 'weekly') return 'Last 7 days';
-    if (viewMode === 'monthly') {
-      return new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-    }
-    if (viewMode === 'custom' && startDate && endDate) {
-      return `${new Date(startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date(endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-    }
-    return 'Select date range';
-  };
-
-  const handleApplyCustomRange = () => {
-    if (!startDate || !endDate) { setDateError('Both dates are required.'); return; }
-    if (new Date(endDate) < new Date(startDate)) { setDateError('End date must be after start date.'); return; }
-    setDateError(null);
-    setShowDatePicker(false);
-  };
-
-  const chartHeight = compact ? '128px' : '200px';
+  const activeLabel = PRESETS.find((p) => p.id === preset)?.label ?? 'Custom';
+  const subtitle = range
+    ? `${range.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${range.end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${totals.det} detections · ${totals.viol} violations`
+    : 'Select a custom date range';
 
   return (
-    <div className={`relative h-full bg-white border border-gray-200 ${compact ? 'p-4 shadow-sm rounded-xl' : 'p-5 shadow-md rounded-2xl'}`}>
-      <div className="flex flex-col gap-3">
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="min-w-0 text-sm font-bold text-gray-800">Number of Incidents</h3>
-          <span className="max-w-[55%] truncate px-2 py-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-100 rounded-md">
-            {getTitle()}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-3 gap-1 rounded-lg bg-gray-100 p-1">
-          {VIEW_MODES.map(({ id, label }) => (
+    <Card>
+      <CardHeader
+        title="Detections Over Time"
+        subtitle={subtitle}
+        icon={<Activity className="h-[18px] w-[18px]" />}
+        actions={
+          <div className="relative" ref={ref}>
             <button
-              key={id}
-              onClick={() => { setViewMode(id); setShowDatePicker(id === 'custom' ? !showDatePicker : false); }}
-              className={`min-w-0 px-2 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                viewMode === id ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-white'
-              }`}
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              className="flex h-9 items-center gap-2 rounded-lg border border-ink-200 bg-white px-3 text-xs font-semibold text-ink-700 shadow-xs transition-colors hover:bg-ink-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40"
+              aria-haspopup="listbox"
+              aria-expanded={open}
             >
-              {label}
+              <Calendar className="h-3.5 w-3.5 text-ink-400" aria-hidden="true" />
+              {activeLabel}
+              <ChevronDown className={`h-3.5 w-3.5 text-ink-400 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
             </button>
-          ))}
-        </div>
+
+            {open && (
+              <div className="absolute right-0 z-20 mt-2 w-56 origin-top-right animate-scale-in rounded-xl border border-ink-200 bg-white p-1.5 shadow-elevated" role="listbox">
+                {PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    role="option"
+                    aria-selected={preset === p.id}
+                    onClick={() => {
+                      setPreset(p.id);
+                      if (p.id !== 'custom') setOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-medium transition-colors ${
+                      preset === p.id ? 'bg-brand-50 text-brand-700' : 'text-ink-600 hover:bg-ink-50'
+                    }`}
+                  >
+                    {p.label}
+                    {preset === p.id && <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />}
+                  </button>
+                ))}
+
+                {preset === 'custom' && (
+                  <div className="mt-1 space-y-2 border-t border-ink-100 p-2">
+                    {[['start', 'From'], ['end', 'To']].map(([key, lbl]) => (
+                      <label key={key} className="block">
+                        <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-400">{lbl}</span>
+                        <input
+                          type="date"
+                          value={custom[key]}
+                          onChange={(e) => setCustom((c) => ({ ...c, [key]: e.target.value }))}
+                          className="w-full rounded-lg border border-ink-200 px-2.5 py-1.5 text-xs text-ink-700 focus:border-brand-400 focus:outline-none"
+                        />
+                      </label>
+                    ))}
+                    <button
+                      onClick={() => setOpen(false)}
+                      disabled={!custom.start || !custom.end}
+                      className="w-full rounded-lg bg-brand-600 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Apply range
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        }
+      />
+
+      <div className="mt-4 flex items-center gap-4">
+        {[
+          { label: 'Detections', color: CHART.brand },
+          { label: 'Violations', color: CHART.negative },
+        ].map((l) => (
+          <span key={l.label} className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-500">
+            <span className="h-2 w-2.5 rounded-sm" style={{ backgroundColor: l.color }} />
+            {l.label}
+          </span>
+        ))}
       </div>
 
-      {showDatePicker && (
-        <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-          {[['Start Date', startDate, setStartDate], ['End Date', endDate, setEndDate]].map(([label, val, setter]) => (
-            <div key={label} className="mb-2">
-              <label className="block mb-1 text-xs font-semibold text-gray-700">{label}</label>
-              <input
-                type="date"
-                value={val}
-                onChange={(e) => { setter(e.target.value); setDateError(null); }}
-                className="w-full min-w-0 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+      <div className="mt-3 h-[248px] w-full">
+        {data.length > 0 && totals.det + totals.viol >= 0 && data.some((d) => d.detections || d.violations) ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+              <defs>
+                <linearGradient id="detGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={CHART.brand} stopOpacity={0.22} />
+                  <stop offset="100%" stopColor={CHART.brand} stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke={CHART.grid} vertical={false} />
+              <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" minTickGap={18} />
+              <YAxis {...axisProps} allowDecimals={false} width={42} />
+              <Tooltip content={<ChartTooltip />} cursor={lineCursor} />
+              <Area
+                type="monotone"
+                name="Detections"
+                dataKey="detections"
+                stroke={CHART.brand}
+                strokeWidth={2.5}
+                fill="url(#detGradient)"
+                activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff' }}
+                animationDuration={700}
               />
-            </div>
-          ))}
-          {dateError && <p className="mb-2 text-xs text-red-600 font-medium">{dateError}</p>}
-          <div className="flex gap-2">
-            <button onClick={handleApplyCustomRange} className="flex-1 px-3 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Apply</button>
-            <button onClick={() => setShowDatePicker(false)} className="flex-1 px-3 py-2 text-xs font-semibold text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
-          </div>
-        </div>
-      )}
-
-      {data.length > 0 ? (
-        <div className="flex items-end justify-around gap-2 mt-3" style={{ height: chartHeight }}>
-          {data.map((item) => {
-            const heightPct = (item.count / maxValue) * 100;
-            return (
-              <div key={item.day} className="flex flex-col items-center justify-end flex-1 h-full gap-2">
-                <div className="text-xs font-semibold text-gray-700">{item.count}</div>
-                <div
-                  className="w-full transition-all duration-500 rounded-t"
-                  style={{ height: `${heightPct}%`, minHeight: '4px', background: 'linear-gradient(to top, #1e40af 0%, #3b82f6 100%)' }}
-                />
-                <div className="text-xs font-medium text-center text-gray-600">{item.day}</div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="flex items-center justify-center" style={{ height: chartHeight }}>
-          <p className="text-sm text-gray-500">
-            {viewMode === 'custom' ? 'Please select a date range' : 'No data available'}
-          </p>
-        </div>
-      )}
-    </div>
+              <Line
+                type="monotone"
+                name="Violations"
+                dataKey="violations"
+                stroke={CHART.negative}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff' }}
+                animationDuration={700}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        ) : (
+          <EmptyState
+            icon={LineIcon}
+            title="No detections in this range"
+            description="Try a wider date range or a different preset."
+            className="h-full"
+          />
+        )}
+      </div>
+    </Card>
   );
 };
 

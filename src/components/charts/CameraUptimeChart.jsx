@@ -1,51 +1,69 @@
-/** CameraUptimeChart — Static pie chart showing system camera uptime. */
-const CHART_SIZE   = 140;
-const STROKE_WIDTH = 30;
-const RADIUS       = (CHART_SIZE - STROKE_WIDTH) / 2;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+import { PolarAngleAxis, RadialBar, RadialBarChart, ResponsiveContainer } from 'recharts';
+import { Video } from 'lucide-react';
+import { Card, CardHeader } from '@/components/ui';
+import { CHART } from '@/lib/chart/theme';
 
 const UPTIME_DATA = { uptime: 95.8, downtime: 4.2, totalHours: 720, uptimeHours: 690 };
 
-const CameraUptimeChart = ({ compact = false }) => {
+/** CameraUptimeChart — radial gauge of system camera availability. */
+const CameraUptimeChart = () => {
   const { uptime, downtime, totalHours, uptimeHours } = UPTIME_DATA;
-  const uptimeDash = (uptime / 100) * CIRCUMFERENCE;
+  const data = [{ name: 'Uptime', value: uptime, fill: CHART.brand }];
 
   return (
-    <div className={`h-full bg-white border border-gray-200 ${compact ? 'p-4 shadow-sm rounded-xl' : 'p-5 shadow-md rounded-2xl'}`}>
-      <h3 className="mb-3 text-sm font-bold text-gray-800">Uptime of Cameras</h3>
+    <Card>
+      <CardHeader
+        title="Camera Uptime"
+        subtitle="System availability · last 30 days"
+        icon={<Video className="h-[18px] w-[18px]" />}
+      />
+      <div className="mt-4 flex flex-1 flex-col items-center gap-4 sm:flex-row sm:items-center">
+        <div className="relative h-[150px] w-[150px] flex-shrink-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <RadialBarChart
+              innerRadius="74%"
+              outerRadius="100%"
+              data={data}
+              startAngle={90}
+              endAngle={-270}
+              barSize={14}
+            >
+              <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
+              <RadialBar
+                dataKey="value"
+                cornerRadius={8}
+                background={{ fill: '#eef1f6' }}
+                animationDuration={750}
+              />
+            </RadialBarChart>
+          </ResponsiveContainer>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+            <span className="tnum font-display text-2xl font-extrabold leading-none text-ink-900">{uptime}%</span>
+            <span className="mt-0.5 text-2xs font-semibold uppercase tracking-wide text-emerald-600">Operational</span>
+          </div>
+        </div>
 
-      <div className={`relative ${compact ? 'w-24 h-24' : 'w-36 h-36'} mx-auto`}>
-        <svg viewBox={`0 0 ${CHART_SIZE} ${CHART_SIZE}`} className="transform -rotate-90">
-          <circle cx={CHART_SIZE / 2} cy={CHART_SIZE / 2} r={RADIUS} fill="none"
-            stroke="#1e40af" strokeWidth={STROKE_WIDTH}
-            strokeDasharray={`${uptimeDash} ${CIRCUMFERENCE}`}
-            className="transition-all duration-500" />
-          <circle cx={CHART_SIZE / 2} cy={CHART_SIZE / 2} r={RADIUS} fill="none"
-            stroke="#ef4444" strokeWidth={STROKE_WIDTH}
-            strokeDasharray={`${((downtime / 100) * CIRCUMFERENCE)} ${CIRCUMFERENCE}`}
-            strokeDashoffset={`-${uptimeDash}`}
-            className="transition-all duration-500" />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className={`${compact ? 'text-lg' : 'text-2xl'} font-bold text-gray-800`}>{uptime}%</div>
+        <div className="w-full flex-1 space-y-2">
+          {[
+            { label: 'Uptime', pct: uptime, hours: uptimeHours, color: CHART.brand },
+            { label: 'Downtime', pct: downtime, hours: totalHours - uptimeHours, color: CHART.neutral },
+          ].map((r) => (
+            <div key={r.label} className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2 text-xs font-medium text-ink-600">
+                <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: r.color }} />
+                {r.label}
+              </span>
+              <span className="tnum text-xs font-bold text-ink-900">
+                {r.pct}%<span className="ml-1 font-medium text-ink-400">{r.hours}h</span>
+              </span>
+            </div>
+          ))}
+          <div className="mt-1 rounded-lg bg-brand-50 px-2.5 py-1.5 text-2xs font-semibold text-brand-700">
+            {uptimeHours}h online of {totalHours}h monitored
+          </div>
         </div>
       </div>
-
-      <div className={`flex flex-col ${compact ? 'gap-1.5 mt-3' : 'gap-2 mt-4'}`}>
-        {[
-          { label: 'Uptime',   value: `${uptime}% (${uptimeHours}h)`,               color: 'bg-blue-800' },
-          { label: 'Downtime', value: `${downtime}% (${totalHours - uptimeHours}h)`, color: 'bg-red-500' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className={`w-3 h-3 ${color} rounded`} />
-              <span className="text-xs font-medium text-gray-700">{label}</span>
-            </div>
-            <span className="text-xs font-semibold text-gray-800">{value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
+    </Card>
   );
 };
 

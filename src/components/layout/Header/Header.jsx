@@ -12,16 +12,7 @@ import NavTabs from './NavTabs';
 const Header = ({ onDownloadReport, currentView, onNavigate }) => {
 
   return (
-    <header
-      style={{
-        background: 'rgba(255,255,255,0.75)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        border: '1px solid rgba(255,255,255,0.25)',
-        boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.3)',
-      }}
-      className="rounded-2xl"
-    >
+    <header className="sticky top-2 z-40 rounded-2xl border border-ink-200/70 bg-white/85 shadow-card backdrop-blur-xl supports-[backdrop-filter]:bg-white/70">
       <div className="flex items-center justify-between gap-3 px-4 py-2.5">
 
         {/* ── Brand ── */}
@@ -31,14 +22,7 @@ const Header = ({ onDownloadReport, currentView, onNavigate }) => {
           aria-label="Go to dashboard"
         >
           {/* Logo pill */}
-          <div
-            style={{
-              background: 'rgba(255,255,255,1)',
-              border: '1px solid rgba(0,0,0,0.1)',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-            }}
-            className="flex items-center justify-center rounded-lg p-1.5 h-9 w-auto"
-          >
+          <div className="flex items-center justify-center rounded-lg p-1.5 h-9 w-auto bg-white ring-1 ring-ink-200 shadow-xs">
             <img
               src={mahindraLogo}
               alt="Mahindra AI Logo"
@@ -48,16 +32,10 @@ const Header = ({ onDownloadReport, currentView, onNavigate }) => {
 
           {/* Title + badge */}
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-extrabold text-gray-900 leading-none tracking-tight">
+            <h1 className="font-display text-lg font-extrabold text-ink-900 leading-none tracking-tight">
               SafetyAI
             </h1>
-            <span
-              style={{
-                background: 'rgba(59,130,246,0.12)',
-                border: '1px solid rgba(59,130,246,0.3)',
-              }}
-              className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold text-blue-700 uppercase tracking-widest"
-            >
+            <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold text-brand-700 uppercase tracking-widest bg-brand-50 ring-1 ring-brand-100">
               PPE Detection
             </span>
 
@@ -81,12 +59,7 @@ const Header = ({ onDownloadReport, currentView, onNavigate }) => {
             id="download-report-btn"
             onClick={onDownloadReport}
             title="Download Report"
-            style={{
-              background: 'linear-gradient(135deg, rgba(59,130,246,0.85) 0%, rgba(37,99,235,0.9) 100%)',
-              border: '1px solid rgba(255,255,255,0.25)',
-              boxShadow: '0 2px 8px rgba(37,99,235,0.35)',
-            }}
-            className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-white text-xs font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-400/50 whitespace-nowrap"
+            className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-brand-600 text-white text-xs font-semibold shadow-xs transition-all duration-200 hover:bg-brand-700 hover:shadow-card-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 whitespace-nowrap"
           >
             <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}

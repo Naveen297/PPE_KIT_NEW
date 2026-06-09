@@ -1,52 +1,77 @@
+import { Area, AreaChart, ResponsiveContainer, YAxis } from 'recharts';
+import { clsx } from 'clsx';
+
 /**
- * A single KPI stat card for the dashboard.
+ * StatCard — premium KPI tile: leading icon, headline value, and a subtle
+ * sparkline showing the 14-day trajectory.
  *
- * @param {Object}  props
- * @param {string}  props.title      - Card label.
- * @param {string|number} props.value - The displayed metric.
- * @param {string}  props.gradient   - Tailwind gradient classes for the icon bg.
- * @param {string}  props.bgColor    - Tailwind bg class for the card background.
- * @param {string}  props.borderColor - Tailwind border class.
- * @param {React.ReactNode} props.icon - SVG icon element.
- * @param {string}  [props.valueColor] - Optional Tailwind text colour for value.
- * @param {boolean} [props.showTrend=false] - Whether to show trend arrow.
- * @param {boolean} [props.trendUp=true]    - Direction of the trend arrow.
+ * @param {Object} props
+ * @param {string} props.label
+ * @param {string|number} props.value
+ * @param {React.ReactNode} props.icon
+ * @param {Object} props.accent            - { iconBg, iconText, stroke, fill, gradientId }
+ * @param {number[]} [props.series]        - Sparkline values.
  */
 const StatCard = ({
-  title,
+  label,
   value,
-  gradient,
-  bgColor,
-  borderColor,
   icon,
-  valueColor,
-  showTrend = false,
-  trendUp = true,
-}) => (
-  <div className={`${bgColor} ${borderColor} border-2 p-2.5 rounded-lg shadow-sm hover:shadow-md transition-all duration-300`}>
-    <div className="flex items-center gap-3">
-      <div className={`bg-gradient-to-br ${gradient} w-8 h-8 rounded-lg flex items-center justify-center shadow-md flex-shrink-0`}>
-        {icon}
+  accent,
+  series = [],
+}) => {
+  const data = series.map((v, i) => ({ i, v }));
+  const hasTrend = series.length > 0;
+
+  return (
+    <div className="group relative flex h-full flex-col overflow-hidden rounded-xl border border-ink-200/70 bg-white p-3.5 shadow-card transition-all duration-300 ease-out-expo hover:-translate-y-0.5 hover:shadow-card-hover">
+      <div className="flex items-center gap-2.5">
+        <span
+          className={clsx(
+            'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg',
+            accent?.iconBg,
+            accent?.iconText,
+          )}
+          aria-hidden="true"
+        >
+          {icon}
+        </span>
+        <div className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wide text-ink-500">
+          {label}
+        </div>
       </div>
-      <div className="flex-1 min-w-0 text-xs font-semibold text-gray-600">{title}</div>
-      <div className="flex items-center gap-1.5">
-        <div className={`text-xl font-bold ${valueColor ?? 'text-gray-800'}`}>{value}</div>
-        {showTrend && (
-          <div className="flex-shrink-0">
-            {trendUp ? (
-              <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-              </svg>
-            )}
+
+      <div className="mt-2.5 flex items-end justify-between gap-2">
+        <div className="tnum font-display text-2xl font-extrabold leading-none tracking-tight text-ink-900">
+          {value}
+        </div>
+        {hasTrend && (
+          <div className="h-8 w-20 flex-shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data} margin={{ top: 3, right: 0, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id={accent?.gradientId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={accent?.stroke} stopOpacity={0.22} />
+                    <stop offset="100%" stopColor={accent?.stroke} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <YAxis hide domain={['dataMin', 'dataMax']} />
+                <Area
+                  type="monotone"
+                  dataKey="v"
+                  stroke={accent?.stroke}
+                  strokeWidth={2}
+                  fill={`url(#${accent?.gradientId})`}
+                  isAnimationActive
+                  animationDuration={700}
+                  dot={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         )}
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default StatCard;
