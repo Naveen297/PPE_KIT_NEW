@@ -5,7 +5,8 @@ import { useMemo } from 'react';
  * Derived from real detections: violations with many missing items = high risk.
  *
  * @param {Object} props
- * @param {Array}  props.detections - Detection records.
+ * @param {Array}   props.detections - Detection records.
+ * @param {boolean} props.compact    - Uses a shorter card for dashboard summary rows.
  */
 const RISK_CONFIG = [
   { type: 'High Risk',     color: '#ef4444', threshold: 2 },   // ≥2 missing items
@@ -18,7 +19,7 @@ const STROKE_WIDTH = 30;
 const RADIUS       = (CHART_SIZE - STROKE_WIDTH) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-const RiskLevelChart = ({ detections }) => {
+const RiskLevelChart = ({ detections, compact = false }) => {
   const riskCounts = useMemo(() => {
     let high = 0, medium = 0, underControl = 0;
     detections.forEach((d) => {
@@ -34,11 +35,10 @@ const RiskLevelChart = ({ detections }) => {
   let offset = 0;
 
   return (
-    <div className="h-full p-5 bg-white border border-gray-200 shadow-md rounded-2xl">
-      <h3 className="mb-2 text-sm font-bold text-gray-800">Level of Risk</h3>
-      <p className="mb-4 text-xs text-gray-500">Pie Chart • Unit: Numbers</p>
+    <div className={`h-full bg-white border border-gray-200 ${compact ? 'p-4 shadow-sm rounded-xl' : 'p-5 shadow-md rounded-2xl'}`}>
+      <h3 className="mb-3 text-sm font-bold text-gray-800">Level of Risk</h3>
 
-      <div className="relative w-36 h-36 mx-auto">
+      <div className={`relative ${compact ? 'w-24 h-24' : 'w-36 h-36'} mx-auto`}>
         <svg viewBox={`0 0 ${CHART_SIZE} ${CHART_SIZE}`} className="transform -rotate-90">
           {RISK_CONFIG.map(({ type, color }, i) => {
             const pct = riskCounts[i] / total;
@@ -63,7 +63,7 @@ const RiskLevelChart = ({ detections }) => {
         </svg>
       </div>
 
-      <div className="flex flex-col gap-2 mt-4">
+      <div className={`flex flex-col ${compact ? 'gap-1.5 mt-3' : 'gap-2 mt-4'}`}>
         {RISK_CONFIG.map(({ type, color }, i) => (
           <div key={type} className="flex items-center justify-between">
             <div className="flex items-center gap-2">

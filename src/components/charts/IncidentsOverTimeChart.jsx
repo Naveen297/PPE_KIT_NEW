@@ -7,8 +7,7 @@ const VIEW_MODES = [
 ];
 
 /**
- * Groups detections by day-of-week (weekly) or by week number (monthly).
- * Falls back to seed data if no detections available.
+ * Groups detections by day-of-week, current-month weeks, or a custom range.
  */
 const buildChartData = (detections, viewMode, startDate, endDate) => {
   if (viewMode === 'weekly') {
@@ -23,13 +22,19 @@ const buildChartData = (detections, viewMode, startDate, endDate) => {
 
   if (viewMode === 'monthly') {
     const weeks = [0, 0, 0, 0];
-    const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
     detections
-      .filter((d) => new Date(d.timestamp) >= oneMonthAgo)
+      .filter((d) => {
+        const detectionDate = new Date(d.timestamp);
+        return detectionDate >= monthStart && detectionDate <= monthEnd;
+      })
       .forEach((d) => {
-        const daysAgo = Math.floor((Date.now() - new Date(d.timestamp)) / (24 * 60 * 60 * 1000));
-        const weekIdx = Math.min(3, Math.floor(daysAgo / 7));
-        weeks[3 - weekIdx]++;
+        const dayOfMonth = new Date(d.timestamp).getDate();
+        const weekIdx = Math.min(3, Math.floor((dayOfMonth - 1) / 7));
+        weeks[weekIdx]++;
       });
     return weeks.map((count, i) => ({ day: `Week ${i + 1}`, count }));
   }
@@ -71,9 +76,10 @@ const buildChartData = (detections, viewMode, startDate, endDate) => {
  * Derived from real `detections` data.
  *
  * @param {Object} props
- * @param {Array}  props.detections - Detection records from context.
+ * @param {Array}   props.detections - Detection records from context.
+ * @param {boolean} props.compact    - Uses a shorter card for dashboard summary rows.
  */
-const IncidentsOverTimeChart = ({ detections }) => {
+const IncidentsOverTimeChart = ({ detections, compact = false }) => {
   const [viewMode, setViewMode]         = useState('weekly');
   const [startDate, setStartDate]       = useState('');
   const [endDate, setEndDate]           = useState('');
@@ -89,7 +95,9 @@ const IncidentsOverTimeChart = ({ detections }) => {
 
   const getTitle = () => {
     if (viewMode === 'weekly') return 'Last 7 days';
-    if (viewMode === 'monthly') return 'Last 4 weeks';
+    if (viewMode === 'monthly') {
+      return new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    }
     if (viewMode === 'custom' && startDate && endDate) {
       return `${new Date(startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date(endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
     }
@@ -103,20 +111,25 @@ const IncidentsOverTimeChart = ({ detections }) => {
     setShowDatePicker(false);
   };
 
+  const chartHeight = compact ? '128px' : '200px';
+
   return (
-    <div className="relative h-full p-5 bg-white border border-gray-200 shadow-md rounded-2xl">
-      <div className="flex items-start justify-between mb-2">
-        <div>
-          <h3 className="text-sm font-bold text-gray-800">Number of Incidents</h3>
-          <p className="mt-1 text-xs text-gray-500">Bar Graph • {getTitle()} • Unit: Numbers</p>
+    <div className={`relative h-full bg-white border border-gray-200 ${compact ? 'p-4 shadow-sm rounded-xl' : 'p-5 shadow-md rounded-2xl'}`}>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="min-w-0 text-sm font-bold text-gray-800">Number of Incidents</h3>
+          <span className="max-w-[55%] truncate px-2 py-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-100 rounded-md">
+            {getTitle()}
+          </span>
         </div>
-        <div className="flex gap-1">
+
+        <div className="grid grid-cols-3 gap-1 rounded-lg bg-gray-100 p-1">
           {VIEW_MODES.map(({ id, label }) => (
             <button
               key={id}
               onClick={() => { setViewMode(id); setShowDatePicker(id === 'custom' ? !showDatePicker : false); }}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
-                viewMode === id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              className={`min-w-0 px-2 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                viewMode === id ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-white'
               }`}
             >
               {label}
@@ -126,15 +139,15 @@ const IncidentsOverTimeChart = ({ detections }) => {
       </div>
 
       {showDatePicker && (
-        <div className="absolute right-5 top-16 z-10 p-4 bg-white border-2 border-gray-200 rounded-xl shadow-lg w-72">
+        <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
           {[['Start Date', startDate, setStartDate], ['End Date', endDate, setEndDate]].map(([label, val, setter]) => (
-            <div key={label} className="mb-3">
+            <div key={label} className="mb-2">
               <label className="block mb-1 text-xs font-semibold text-gray-700">{label}</label>
               <input
                 type="date"
                 value={val}
                 onChange={(e) => { setter(e.target.value); setDateError(null); }}
-                className="w-full px-3 py-2 text-sm border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                className="w-full min-w-0 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
               />
             </div>
           ))}
@@ -147,7 +160,7 @@ const IncidentsOverTimeChart = ({ detections }) => {
       )}
 
       {data.length > 0 ? (
-        <div className="flex items-end justify-around gap-2 mt-4" style={{ height: '200px' }}>
+        <div className="flex items-end justify-around gap-2 mt-3" style={{ height: chartHeight }}>
           {data.map((item) => {
             const heightPct = (item.count / maxValue) * 100;
             return (
@@ -163,7 +176,7 @@ const IncidentsOverTimeChart = ({ detections }) => {
           })}
         </div>
       ) : (
-        <div className="flex items-center justify-center" style={{ height: '200px' }}>
+        <div className="flex items-center justify-center" style={{ height: chartHeight }}>
           <p className="text-sm text-gray-500">
             {viewMode === 'custom' ? 'Please select a date range' : 'No data available'}
           </p>

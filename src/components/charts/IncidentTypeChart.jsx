@@ -16,9 +16,10 @@ const ITEM_LABELS = {
  * IncidentTypeChart — Horizontal bar chart showing counts by missing PPE type.
  *
  * @param {Object} props
- * @param {Array}  props.detections - Detection records.
+ * @param {Array}   props.detections - Detection records.
+ * @param {boolean} props.compact    - Uses a shorter card for dashboard summary rows.
  */
-const IncidentTypeChart = ({ detections }) => {
+const IncidentTypeChart = ({ detections, compact = false }) => {
   const incidentTypes = useMemo(() => {
     const counts = {};
     detections
@@ -32,22 +33,21 @@ const IncidentTypeChart = ({ detections }) => {
     return Object.entries(counts)
       .map(([type, count]) => ({ type, count }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
-  }, [detections]);
+      .slice(0, compact ? 5 : 6);
+  }, [compact, detections]);
 
   const maxCount = Math.max(...incidentTypes.map((i) => i.count), 1);
 
   return (
-    <div className="h-full p-5 bg-white border border-gray-200 shadow-md rounded-2xl">
-      <h3 className="mb-2 text-sm font-bold text-gray-800">Type of Incidents</h3>
-      <p className="mb-4 text-xs text-gray-500">Bar Graph • Last 30 days • Unit: Numbers</p>
-      <div className="space-y-3">
+    <div className={`h-full bg-white border border-gray-200 ${compact ? 'p-4 shadow-sm rounded-xl' : 'p-5 shadow-md rounded-2xl'}`}>
+      <h3 className="mb-3 text-sm font-bold text-gray-800">Type of Incidents</h3>
+      <div className={compact ? 'space-y-2' : 'space-y-3'}>
         {incidentTypes.map(({ type, count }, idx) => (
           <div key={type} className="flex items-center gap-2">
             <div className="flex-shrink-0 w-3 h-3 rounded-full" style={{ backgroundColor: INCIDENT_COLORS[idx % INCIDENT_COLORS.length] }} />
             <div className="flex items-center flex-1 gap-2">
-              <div className="w-40 text-xs font-medium text-gray-700 truncate">{type}</div>
-              <div className="relative flex-1 h-5 overflow-hidden bg-gray-100 rounded">
+              <div className={`${compact ? 'w-24' : 'w-40'} text-xs font-medium text-gray-700 truncate`}>{type}</div>
+              <div className={`relative flex-1 ${compact ? 'h-4' : 'h-5'} overflow-hidden bg-gray-100 rounded`}>
                 <div
                   className="h-full transition-all duration-500 rounded"
                   style={{ width: `${(count / maxCount) * 100}%`, backgroundColor: INCIDENT_COLORS[idx % INCIDENT_COLORS.length] }}

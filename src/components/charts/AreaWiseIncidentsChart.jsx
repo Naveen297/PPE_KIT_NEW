@@ -5,10 +5,11 @@ import { useMemo } from 'react';
  * Derived from real detections data grouped by location.
  *
  * @param {Object} props
- * @param {Array}  props.detections  - Detection records.
- * @param {Array}  props.plantZones  - Zone names for the current plant.
+ * @param {Array}   props.detections  - Detection records.
+ * @param {Array}   props.plantZones  - Zone names for the current plant.
+ * @param {boolean} props.compact     - Uses a shorter card for dashboard summary rows.
  */
-const AreaWiseIncidentsChart = ({ detections, plantZones = [] }) => {
+const AreaWiseIncidentsChart = ({ detections, plantZones = [], compact = false }) => {
   const data = useMemo(() => {
     const counts = {};
     plantZones.forEach((z) => { counts[z] = 0; });
@@ -21,20 +22,19 @@ const AreaWiseIncidentsChart = ({ detections, plantZones = [] }) => {
     return Object.entries(counts)
       .map(([area, count]) => ({ area, count }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
-  }, [detections, plantZones]);
+      .slice(0, compact ? 5 : 6);
+  }, [compact, detections, plantZones]);
 
   const maxValue = Math.max(...data.map((d) => d.count), 1);
 
   return (
-    <div className="h-full p-5 bg-white border border-gray-200 shadow-md rounded-2xl">
-      <h3 className="mb-2 text-sm font-bold text-gray-800">Area-wise Incidents</h3>
-      <p className="mb-4 text-xs text-gray-500">Horizontal Bar • Last 30 days • Unit: Numbers</p>
-      <div className="space-y-3">
+    <div className={`h-full bg-white border border-gray-200 ${compact ? 'p-4 shadow-sm rounded-xl' : 'p-5 shadow-md rounded-2xl'}`}>
+      <h3 className="mb-3 text-sm font-bold text-gray-800">Area-wise Incidents</h3>
+      <div className={compact ? 'space-y-2' : 'space-y-3'}>
         {data.map(({ area, count }) => (
           <div key={area} className="flex items-center gap-3">
-            <div className="w-32 text-xs font-medium text-gray-700 truncate">{area}</div>
-            <div className="relative flex-1 h-7 overflow-hidden bg-gray-100 rounded">
+            <div className={`${compact ? 'w-24' : 'w-32'} text-xs font-medium text-gray-700 truncate`}>{area}</div>
+            <div className={`relative flex-1 ${compact ? 'h-5' : 'h-7'} overflow-hidden bg-gray-100 rounded`}>
               <div
                 className="h-full transition-all duration-500 rounded"
                 style={{ width: `${(count / maxValue) * 100}%`, background: 'linear-gradient(90deg, #1e40af 0%, #3b82f6 100%)' }}

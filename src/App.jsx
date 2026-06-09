@@ -14,7 +14,6 @@ import {
   AreaWiseIncidentsChart,
   RiskLevelChart,
   CameraUptimeChart,
-  IncidentTypeChart,
 } from '@/components/charts';
 
 // Monitoring
@@ -65,16 +64,31 @@ function AppContent() {
         {currentView === 'live' ? (
           <LiveMonitoring />
         ) : (
-          <div className="grid grid-cols-1 gap-6 mt-6 lg:grid-cols-12 animate-fade-in">
+          <div className="grid grid-cols-1 gap-5 mt-6 lg:grid-cols-12 animate-fade-in">
             <div className="lg:col-span-12">
               <StatsSection stats={stats} detections={detections} />
             </div>
 
-            <div className="lg:col-span-6"><IncidentsOverTimeChart detections={detections} /></div>
-            <div className="lg:col-span-6"><AreaWiseIncidentsChart detections={detections} plantZones={currentPlant.zones} /></div>
-            <div className="lg:col-span-4"><RiskLevelChart detections={detections} /></div>
-            <div className="lg:col-span-4"><CameraUptimeChart /></div>
-            <div className="lg:col-span-4"><IncidentTypeChart detections={detections} /></div>
+            <section className="lg:col-span-12">
+              <div className="mb-3">
+                <h2 className="text-lg font-bold text-gray-900">Analytics Snapshot</h2>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-12">
+                <div className="xl:col-span-4">
+                  <IncidentsOverTimeChart detections={detections} compact />
+                </div>
+                <div className="xl:col-span-4">
+                  <AreaWiseIncidentsChart detections={detections} plantZones={currentPlant.zones} compact />
+                </div>
+                <div className="xl:col-span-2">
+                  <RiskLevelChart detections={detections} compact />
+                </div>
+                <div className="xl:col-span-2">
+                  <CameraUptimeChart compact />
+                </div>
+              </div>
+            </section>
 
             <div className="lg:col-span-12">
               <DetectionsTable detections={detections} onViewDetails={handleViewDetails} />
