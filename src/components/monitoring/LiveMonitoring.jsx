@@ -3,7 +3,7 @@ import { usePlant } from '@/hooks';
 import CameraConfigSidebar from './CameraConfigSidebar';
 import CameraPanel from './CameraPanel';
 
-const INITIAL_CONFIG = { shop: '', line: '', stage: '' };
+const INITIAL_CONFIG = { area: '' };
 
 /**
  * LiveMonitoring — Container component for the live camera feed view.
@@ -16,11 +16,11 @@ const LiveMonitoring = () => {
   const [validationError, setValidationError] = useState(null);
 
   const handleStartStream = useCallback(() => {
-    if (config.shop && config.line && config.stage) {
+    if (config.area) {
       setValidationError(null);
       setIsStreaming(true);
     } else {
-      setValidationError('Please select Shop, Line, and Stage before starting the stream.');
+      setValidationError('Please select an Area before starting the stream.');
     }
   }, [config]);
 

@@ -1,0 +1,346 @@
+==============================================================================
+  SafetyAI — PPE Detection Dashboard
+  SIMPLE API REFERENCE  (Dashboard page only)
+==============================================================================
+
+Base URL : http://localhost:5000/api/v1
+Auth     : Every request needs a header ->  Authorization: Bearer <token>
+Format   : All requests & responses are JSON.
+Note     : Single plant setup — you do NOT need to send a plantId.
+
+------------------------------------------------------------------------------
+  WHICH API FEEDS WHICH PART OF THE DASHBOARD
+------------------------------------------------------------------------------
+  1. KPI cards + PPE breakdown      -> GET /dashboard/stats
+  2. "Detections Over Time" chart   -> GET /dashboard/charts/incidents-over-time
+  3. "Violations by Zone" chart     -> GET /dashboard/charts/area-wise
+  4. "Risk Distribution" donut      -> GET /dashboard/charts/risk-level
+  5. "Camera Uptime" gauge          -> GET /dashboard/charts/camera-uptime
+  6. "Incident Types" bar chart     -> GET /dashboard/charts/incident-type
+  7. "PPE Violation Log" table      -> GET /detections
+  8. Row "View details" modal       -> GET /detections/:id
+  9. (Optional) live new rows       -> GET /detections/stream   (SSE)
+
+Every response follows the same wrapper:
+  {
+    "success": true,
+    "message": "....",
+    "data": { ... }      <- the useful part
+  }
+
+
+==============================================================================
+  1. KPI STATS  +  PPE BREAKDOWN
+==============================================================================
+Feeds : 4 top cards (Total, Compliant, Violations, Compliance Rate)
+        + the "PPE Violations by Item" tiles
+        + the small sparkline on each KPI card.
+
+REQUEST
+  GET /dashboard/stats?range=7d
+
+  Query params (all optional):
+    range : today | yesterday | 7d | 30d | 90d | thisMonth | lastMonth
+            (default: 7d)
+
+PAYLOAD (body)
+  None.
+
+RESPONSE  (200 OK)
+{
+  "success": true,
+  "message": "Dashboard stats retrieved",
+  "data": {
+    "totalDetections": 54,
+    "compliant": 34,
+    "violations": 20,
+    "complianceRate": 63.0,
+
+    "ppeBreakdown": {
+      "helmet": 6,
+      "gloves": 2,
+      "apron": 4,
+      "mobile": 0,
+      "shoes": 9,
+      "goggles": 0
+    },
+
+    "sparklines": {
+      "totalDetections": [3,5,2,6,4,5,3,4,6,2,5,3,4,6],
+      "compliant":       [2,3,1,4,3,3,2,3,4,1,3,2,3,4],
+      "violations":      [1,2,1,2,1,2,1,1,2,1,2,1,1,2],
+      "complianceRate":  [66,60,50,66,75,60,66,75,66,50,60,66,75,66]
+    }
+  }
+}
+
+NOTES
+  - complianceRate = (compliant / totalDetections) * 100, 1 decimal.
+  - sparklines = last 14 daily values (oldest first). Used to draw the
+    little trend line on each card. Send [] if you have no history.
+
+
+==============================================================================
+  2. DETECTIONS OVER TIME  (line / area chart)
+==============================================================================
+Feeds : The big "Detections Over Time" chart with the date-range picker.
+
+REQUEST
+  GET /dashboard/charts/incidents-over-time?range=7d
+
+  Query params:
+    range     : today | yesterday | 7d | 30d | 90d | thisMonth |
+                lastMonth | custom        (default: 7d)
+    startDate : YYYY-MM-DD   (only when range=custom)
+    endDate   : YYYY-MM-DD   (only when range=custom)
+
+  Example (custom):
+    GET /dashboard/charts/incidents-over-time?range=custom
+        &startDate=2026-06-01&endDate=2026-06-07
+
+PAYLOAD (body)
+  None.
+
+RESPONSE  (200 OK)
+{
+  "success": true,
+  "message": "Time series retrieved",
+  "data": {
+    "rangeLabel": "Jun 1 – Jun 7",
+    "points": [
+      { "label": "Jun 1", "detections": 8, "violations": 3 },
+      { "label": "Jun 2", "detections": 6, "violations": 2 },
+      { "label": "Jun 3", "detections": 9, "violations": 4 }
+    ]
+  }
+}
+
+NOTES
+  - "label" is just the text shown on the X-axis.
+  - For short ranges (today/yesterday) labels can be hours: "9 AM", "12 PM".
+  - "detections" = all detections in that bucket, "violations" = how many
+    of them were violations.
+
+
+==============================================================================
+  3. VIOLATIONS BY ZONE  (horizontal bar chart)
+==============================================================================
+REQUEST
+  GET /dashboard/charts/area-wise?range=30d
+
+  Query params:
+    range : today | 7d | 30d | 90d   (default: 30d)
+
+PAYLOAD (body)
+  None.
+
+RESPONSE  (200 OK)
+{
+  "success": true,
+  "message": "Zone violations retrieved",
+  "data": {
+    "zones": [
+      { "area": "Assembly Line A", "count": 12 },
+      { "area": "Paint Shop",      "count": 9 },
+      { "area": "Welding Section", "count": 7 }
+    ]
+  }
+}
+
+NOTES
+  - Already sorted high -> low. Top 6 is enough for the chart.
+
+
+==============================================================================
+  4. RISK DISTRIBUTION  (donut)
+==============================================================================
+Risk is decided by how many PPE items are missing in a detection:
+  2 or more missing = High,  1 missing = Medium,  0 missing = Under Control.
+
+REQUEST
+  GET /dashboard/charts/risk-level?range=30d
+
+PAYLOAD (body)
+  None.
+
+RESPONSE  (200 OK)
+{
+  "success": true,
+  "message": "Risk distribution retrieved",
+  "data": {
+    "high": 8,
+    "medium": 14,
+    "underControl": 32,
+    "total": 54
+  }
+}
+
+
+==============================================================================
+  5. CAMERA UPTIME  (gauge)
+==============================================================================
+REQUEST
+  GET /dashboard/charts/camera-uptime?range=30d
+
+PAYLOAD (body)
+  None.
+
+RESPONSE  (200 OK)
+{
+  "success": true,
+  "message": "Camera uptime retrieved",
+  "data": {
+    "uptimePercent": 95.8,
+    "downtimePercent": 4.2,
+    "uptimeHours": 690,
+    "totalHours": 720
+  }
+}
+
+
+==============================================================================
+  6. INCIDENT TYPES  (bar chart)
+==============================================================================
+Counts how often each PPE item was missing.
+
+REQUEST
+  GET /dashboard/charts/incident-type?range=30d
+
+PAYLOAD (body)
+  None.
+
+RESPONSE  (200 OK)
+{
+  "success": true,
+  "message": "Incident types retrieved",
+  "data": {
+    "types": [
+      { "type": "No Hard Hat",    "count": 18 },
+      { "type": "No Gloves",      "count": 12 },
+      { "type": "No Safety Vest", "count": 9 }
+    ]
+  }
+}
+
+
+==============================================================================
+  7. PPE VIOLATION LOG  (the table)
+==============================================================================
+Feeds : the table at the bottom (sorting, severity filter, pagination).
+
+REQUEST
+  GET /detections?status=violation&severity=all&sortBy=time&sortOrder=desc&page=1&limit=6
+
+  Query params (all optional):
+    status    : violation | compliant | all      (table uses "violation")
+    severity  : all | critical | high | medium    (default: all)
+                critical = 3+ missing, high = 2 missing, medium = 1 missing
+    sortBy    : time | area | severity | confidence   (default: time)
+    sortOrder : asc | desc                            (default: desc)
+    page      : page number, starts at 1             (default: 1)
+    limit     : rows per page                        (default: 6)
+
+PAYLOAD (body)
+  None.
+
+RESPONSE  (200 OK)
+{
+  "success": true,
+  "message": "Detections retrieved",
+  "data": {
+    "items": [
+      {
+        "id": "DET-1717850000-abc123",
+        "timestamp": "2026-06-09T11:42:00Z",
+        "location": "Assembly Line A",
+        "status": "violation",
+        "missingItems": ["Safety Helmet", "Safety Gloves"],
+        "confidence": 92.4
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 6,
+      "totalItems": 20,
+      "totalPages": 4
+    }
+  }
+}
+
+NOTES
+  - "severity" for each row is worked out from missingItems.length:
+      3+ = Critical, 2 = High, 1 = Medium.
+  - confidence is a number 0–100 (the bar in the Confidence column).
+
+
+==============================================================================
+  8. DETECTION DETAILS  (View button -> modal)
+==============================================================================
+REQUEST
+  GET /detections/DET-1717850000-abc123
+
+PAYLOAD (body)
+  None.
+
+RESPONSE  (200 OK)
+{
+  "success": true,
+  "message": "Detection retrieved",
+  "data": {
+    "id": "DET-1717850000-abc123",
+    "timestamp": "2026-06-09T11:42:00Z",
+    "location": "Assembly Line A",
+    "status": "violation",
+    "ppeItems": ["Safety Boots"],
+    "missingItems": ["Safety Helmet", "Safety Gloves"],
+    "confidence": 92.4,
+    "imageUrl": "https://cdn.example.com/detections/DET-1717850000-abc123.jpg"
+  }
+}
+
+
+==============================================================================
+  9. (OPTIONAL) LIVE UPDATES  —  Server-Sent Events
+==============================================================================
+Use this only if you want the table/KPIs to update by themselves.
+
+REQUEST
+  GET /detections/stream
+  Header: Accept: text/event-stream
+
+STREAM MESSAGE (one detection at a time)
+  event: detection
+  data: {
+    "id": "DET-1717850500-xyz789",
+    "timestamp": "2026-06-09T11:55:00Z",
+    "location": "Paint Shop",
+    "status": "violation",
+    "missingItems": ["Safety Vest"],
+    "confidence": 88.1
+  }
+
+
+==============================================================================
+  COMMON ERROR FORMAT
+==============================================================================
+Any failed request returns:
+
+{
+  "success": false,
+  "message": "Short reason here",
+  "error": {
+    "code": "BAD_REQUEST",
+    "details": "Longer explanation (optional)"
+  }
+}
+
+Typical status codes:
+  200  OK          - all good
+  400  Bad Request - wrong/missing query params
+  401  Unauthorized- missing or invalid token
+  404  Not Found   - detection id does not exist
+  500  Server Error- something broke on the backend
+
+==============================================================================
+  END
+==============================================================================

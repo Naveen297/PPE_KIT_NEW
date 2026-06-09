@@ -1,9 +1,9 @@
 /**
  * CameraConfigSidebar — Left panel for LiveMonitoring.
- * Handles shop/line/stage selection, detection indicators, and stream control.
+ * Handles camera area selection, detection indicators, and stream control.
  *
  * @param {Object}   props
- * @param {{ shop, line, stage }} props.config      - Current selection state.
+ * @param {{ area }}  props.config                  - Current selection state.
  * @param {Function} props.onConfigChange           - Called with updated config object.
  * @param {boolean}  props.isStreaming              - Whether stream is active.
  * @param {Function} props.onStartStream            - Start stream handler.
@@ -12,9 +12,19 @@
  * @param {string|null} props.validationError       - Inline validation message.
  */
 
-const SHOPS  = ['Body Shop', 'Paint Shop', 'General Assembly', 'Press Shop'];
-const LINES  = ['Line A', 'Line B', 'Line C', 'Line Main'];
-const STAGES = ['Stage 10', 'Stage 20', 'Stage 30', 'Quality Gate', 'Final Finish'];
+const AREAS = [
+  'Main Road Area / Scrap yard rooftop',
+  'Stores Bolero / Engine Line',
+  'Bolero PC Store 1',
+  'Fabrication PTZ',
+  'Bolero Doc 2',
+  'Bolero Doc 1',
+  'Plant 2 Dock Camera',
+  'Bolero Dock PTZ',
+  'S1T Dock',
+  'S1T Dock Toward PC Store',
+  'S1T Store Near Old D2D Line',
+];
 
 const DETECTION_INDICATORS = [
   { label: 'Helmet',  color: 'bg-red-500' },
@@ -67,24 +77,10 @@ const CameraConfigSidebar = ({
     {/* Config fields */}
     <div className="flex-1 p-5 space-y-5 overflow-y-auto">
       <SelectField
-        label="Shop"
-        value={config.shop}
-        options={SHOPS}
-        onChange={(v) => onConfigChange({ ...config, shop: v })}
-        disabled={isStreaming}
-      />
-      <SelectField
-        label="Line"
-        value={config.line}
-        options={LINES}
-        onChange={(v) => onConfigChange({ ...config, line: v })}
-        disabled={isStreaming}
-      />
-      <SelectField
-        label="Stage"
-        value={config.stage}
-        options={STAGES}
-        onChange={(v) => onConfigChange({ ...config, stage: v })}
+        label="Area"
+        value={config.area}
+        options={AREAS}
+        onChange={(v) => onConfigChange({ ...config, area: v })}
         disabled={isStreaming}
       />
 

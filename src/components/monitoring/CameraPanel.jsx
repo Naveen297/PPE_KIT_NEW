@@ -3,7 +3,7 @@
  *
  * @param {Object} props
  * @param {boolean}  props.isStreaming  - Whether the stream is live.
- * @param {{ shop, line, stage }} props.config - Active configuration.
+ * @param {{ area }} props.config - Active configuration.
  */
 const CameraPanel = ({ isStreaming, config }) => (
   <div className="relative flex flex-col w-4/5 overflow-hidden bg-black border border-gray-800 shadow-lg rounded-2xl">
@@ -18,7 +18,7 @@ const CameraPanel = ({ isStreaming, config }) => (
         </div>
         {isStreaming && (
           <div className="mt-1 font-mono text-xs text-gray-300">
-            CAM_04 | {config.shop} &gt; {config.line} &gt; {config.stage}
+            CAM_04 | {config.area}
           </div>
         )}
       </div>
@@ -72,7 +72,7 @@ const CameraPanel = ({ isStreaming, config }) => (
           </div>
           <h3 className="text-xl font-semibold text-gray-400">Camera Feed Offline</h3>
           <p className="max-w-xs mx-auto mt-2 text-sm text-gray-500">
-            Select a Shop, Line, and Stage from the configuration panel to start the stream.
+            Select an Area from the configuration panel to start the stream.
           </p>
         </div>
       )}
