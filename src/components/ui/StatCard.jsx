@@ -23,30 +23,26 @@ const StatCard = ({
   const hasTrend = series.length > 0;
 
   return (
-    <div className="group relative flex h-full flex-col overflow-hidden rounded-xl border border-ink-200/70 bg-white p-3.5 shadow-card transition-all duration-300 ease-out-expo hover:-translate-y-0.5 hover:shadow-card-hover">
-      <div className="flex items-center gap-2.5">
-        <span
-          className={clsx(
-            'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg',
-            accent?.iconBg,
-            accent?.iconText,
-          )}
-          aria-hidden="true"
-        >
-          {icon}
-        </span>
-        <div className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wide text-ink-500">
-          {label}
-        </div>
+    <div className="group relative flex h-full items-center gap-2.5 overflow-hidden rounded-xl border border-ink-200/70 bg-white px-3 py-2.5 shadow-card transition-all duration-300 ease-out-expo hover:-translate-y-0.5 hover:shadow-card-hover">
+      <span
+        className={clsx(
+          'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg',
+          accent?.iconBg,
+          accent?.iconText,
+        )}
+        aria-hidden="true"
+      >
+        {icon}
+      </span>
+      <div className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wide text-ink-500">
+        {label}
       </div>
-
-      <div className="mt-2.5 flex items-end justify-between gap-2">
-        <div className="tnum font-display text-2xl font-extrabold leading-none tracking-tight text-ink-900">
-          {value}
-        </div>
-        {hasTrend && (
-          <div className="h-8 w-20 flex-shrink-0">
-            <ResponsiveContainer width="100%" height="100%">
+      <div className="tnum font-display text-xl font-extrabold leading-none tracking-tight text-ink-900">
+        {value}
+      </div>
+      {hasTrend && (
+        <div className="h-7 w-16 flex-shrink-0">
+          <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data} margin={{ top: 3, right: 0, bottom: 0, left: 0 }}>
                 <defs>
                   <linearGradient id={accent?.gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -69,7 +65,6 @@ const StatCard = ({
             </ResponsiveContainer>
           </div>
         )}
-      </div>
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { ScanEye, ShieldCheck, ShieldAlert, Gauge } from 'lucide-react';
+import { ScanEye, ShieldAlert } from 'lucide-react';
 import { StatCard, DataState } from '@/components/ui';
 import PPEBreakdownRow from './PPEBreakdownRow';
 
@@ -39,8 +39,8 @@ const StatsSection = ({ stats, loading, error, onRetry }) => {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid grid-cols-2 gap-4">
+          {Array.from({ length: 2 }).map((_, i) => (
             <CardSkeleton key={i} />
           ))}
         </div>
@@ -67,28 +67,16 @@ const StatsSection = ({ stats, loading, error, onRetry }) => {
       accent: ACCENTS.brand,
     },
     {
-      label: 'Compliant',
-      value: num(stats?.compliant),
-      icon: <ShieldCheck className="h-5 w-5" />,
-      accent: ACCENTS.emerald,
-    },
-    {
       label: 'Violations',
       value: num(stats?.violations),
       icon: <ShieldAlert className="h-5 w-5" />,
       accent: ACCENTS.rose,
     },
-    {
-      label: 'Compliance Rate',
-      value: `${stats?.complianceRate ?? 0}%`,
-      icon: <Gauge className="h-5 w-5" />,
-      accent: ACCENTS.violet,
-    },
   ];
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4">
         {cards.map((card) => (
           <StatCard key={card.label} {...card} />
         ))}
