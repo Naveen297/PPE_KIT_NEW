@@ -1,31 +1,27 @@
-import { useMemo } from 'react';
 import { Bar, BarChart, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { MapPin, Building2 } from 'lucide-react';
-import { Card, CardHeader, EmptyState } from '@/components/ui';
+import { Card, CardHeader, EmptyState, DataState } from '@/components/ui';
+import { useApiResource } from '@/hooks';
+import { getAreaWise } from '@/api';
 import { CHART, hoverCursor } from '@/lib/chart/theme';
 import ChartTooltip from '@/lib/chart/ChartTooltip';
 
 /**
- * AreaWiseIncidentsChart — horizontal bar chart of violations per zone.
- * Highest-incident zone is emphasized so the risk hotspot reads instantly.
+ * AreaWiseIncidentsChart — horizontal bar chart of violations per zone,
+ * sourced from `GET /api/v1/dashboard/charts/area-wise`.
+ *
+ * @param {Object} props
+ * @param {'daily'|'weekly'|'monthly'} [props.period='monthly']
  */
-const AreaWiseIncidentsChart = ({ detections = [], plantZones = [] }) => {
-  const data = useMemo(() => {
-    const counts = {};
-    plantZones.forEach((z) => { counts[z] = 0; });
-    detections
-      .filter((d) => d.status === 'violation')
-      .forEach((d) => {
-        counts[d.location] = (counts[d.location] ?? 0) + 1;
-      });
-    return Object.entries(counts)
-      .map(([area, count]) => ({ area, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
-  }, [detections, plantZones]);
+const AreaWiseIncidentsChart = ({ period = 'monthly' }) => {
+  const { data, loading, error, refetch } = useApiResource(
+    (signal) => getAreaWise(period, signal),
+    [period],
+  );
 
-  const max = Math.max(...data.map((d) => d.count), 0);
-  const hasData = data.some((d) => d.count > 0);
+  const rows = data ?? [];
+  const max = Math.max(...rows.map((d) => d.count), 0);
+  const hasData = rows.some((d) => d.count > 0);
 
   return (
     <Card>
@@ -35,11 +31,19 @@ const AreaWiseIncidentsChart = ({ detections = [], plantZones = [] }) => {
         icon={<MapPin className="h-[18px] w-[18px]" />}
       />
       <div className="mt-4 h-[248px] w-full">
-        {hasData ? (
+        <DataState
+          loading={loading}
+          error={error}
+          onRetry={refetch}
+          empty={!hasData}
+          emptyState={
+            <EmptyState icon={Building2} title="No zone violations" description="All monitored areas are compliant." className="h-full" />
+          }
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               layout="vertical"
-              data={data}
+              data={rows}
               margin={{ top: 0, right: 28, bottom: 0, left: 4 }}
               barCategoryGap={10}
             >
@@ -54,7 +58,7 @@ const AreaWiseIncidentsChart = ({ detections = [], plantZones = [] }) => {
               />
               <Tooltip content={<ChartTooltip />} cursor={hoverCursor} />
               <Bar dataKey="count" name="Violations" radius={[0, 6, 6, 0]} maxBarSize={20} animationDuration={650}>
-                {data.map((entry, i) => (
+                {rows.map((entry, i) => (
                   <Cell key={i} fill={i === 0 ? CHART.brand : '#9fc0fb'} />
                 ))}
                 <LabelList
@@ -66,9 +70,7 @@ const AreaWiseIncidentsChart = ({ detections = [], plantZones = [] }) => {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        ) : (
-          <EmptyState icon={Building2} title="No zone violations" description="All monitored areas are compliant." className="h-full" />
-        )}
+        </DataState>
       </div>
     </Card>
   );

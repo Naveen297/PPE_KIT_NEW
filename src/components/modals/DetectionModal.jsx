@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
+import { Loader2, ImageOff } from 'lucide-react';
 import DummyImage from '@/assets/DummyImage.jpg';
 import { ConfidenceBar, PPEItemChip } from '@/components/ui';
+import { useApiResource } from '@/hooks';
+import { getDetection } from '@/api';
 import { getConfidenceLabel, getConfidenceColor } from '@/utils/formatters';
 
-/**
- * DetailRow — A labelled info block inside the modal.
- */
+/** A labelled info block inside the modal. */
 const DetailRow = ({ icon, label, children }) => (
   <div className="p-5 bg-gray-50 rounded-xl border-2 border-gray-200">
     <div className="flex items-center gap-2 mb-2 text-xs font-bold tracking-wider text-gray-500 uppercase">
@@ -17,14 +18,28 @@ const DetailRow = ({ icon, label, children }) => (
 );
 
 /**
- * DetectionModal — Full-screen overlay showing detection event details.
+ * DetectionModal — full-screen overlay showing detection event details.
+ * The summary fields come from the row that was clicked; the full record
+ * (including the base64 snapshot) is fetched from `/api/v1/detections/:id`.
  *
  * @param {Object}   props
- * @param {Object}   props.detection - Detection record to display.
- * @param {Function} props.onClose   - Close handler.
+ * @param {Object}   props.detection - Detection row (provides id + fallback data).
+ * @param {Function} props.onClose
  */
 const DetectionModal = ({ detection, onClose }) => {
-  const confidence = parseFloat(detection.confidence);
+  // Fetch the authoritative record (image lives in the DB, only on detail/list).
+  const { data: fetched, loading, error } = useApiResource(
+    (signal) => getDetection(detection.id, signal),
+    [detection.id],
+    { enabled: detection.id != null },
+  );
+
+  const record = fetched ?? detection;
+  const confidence = parseFloat(record.confidence);
+  const ppeItems = record.ppeItems ?? [];
+  const missingItems = record.missingItems ?? [];
+  const isCompliant = record.status === 'compliant';
+  const imageSrc = record.imageUrl || null;
 
   // Close on Escape key
   useEffect(() => {
@@ -56,7 +71,7 @@ const DetectionModal = ({ detection, onClose }) => {
                 </svg>
                 Detection Details
               </h3>
-              <p className="text-sm text-gray-600 mt-1">ID: {detection.id}</p>
+              <p className="text-sm text-gray-600 mt-1">ID: {record.id}</p>
             </div>
             <button
               onClick={onClose}
@@ -72,18 +87,36 @@ const DetectionModal = ({ detection, onClose }) => {
             {/* Image */}
             <div className="space-y-4">
               <div className="relative">
-                <img
-                  src={DummyImage}
-                  alt="PPE Detection snapshot"
-                  className="w-full rounded-2xl shadow-lg border-2 border-gray-200"
-                />
+                {loading && !record.imageUrl ? (
+                  <div className="flex aspect-[4/3] w-full items-center justify-center rounded-2xl border-2 border-gray-200 bg-gray-50 text-gray-400">
+                    <Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" />
+                  </div>
+                ) : imageSrc ? (
+                  <img
+                    src={imageSrc}
+                    alt="PPE Detection snapshot"
+                    className="w-full rounded-2xl shadow-lg border-2 border-gray-200"
+                  />
+                ) : isCompliant ? (
+                  // Compliant rows carry no image by design.
+                  <img
+                    src={DummyImage}
+                    alt="No snapshot for compliant detection"
+                    className="w-full rounded-2xl shadow-lg border-2 border-gray-200 opacity-90"
+                  />
+                ) : (
+                  <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-gray-200 bg-gray-50 text-gray-400">
+                    <ImageOff className="h-8 w-8" aria-hidden="true" />
+                    <span className="text-sm font-medium">No snapshot available</span>
+                  </div>
+                )}
                 <div className="absolute top-3 right-3">
                   <span
                     className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold shadow-lg text-white ${
-                      detection.status === 'compliant' ? 'bg-green-500' : 'bg-red-500'
+                      isCompliant ? 'bg-green-500' : 'bg-red-500'
                     }`}
                   >
-                    {detection.status === 'compliant' ? (
+                    {isCompliant ? (
                       <>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -101,6 +134,11 @@ const DetectionModal = ({ detection, onClose }) => {
                   </span>
                 </div>
               </div>
+              {error && (
+                <p className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Showing partial details — couldn’t load the full record ({error.message}).
+                </p>
+              )}
             </div>
 
             {/* Details */}
@@ -113,7 +151,7 @@ const DetectionModal = ({ detection, onClose }) => {
                   </svg>
                 }
               >
-                <div className="text-base font-semibold text-gray-900">{detection.timestamp}</div>
+                <div className="text-base font-semibold text-gray-900">{record.timestamp}</div>
               </DetailRow>
 
               <DetailRow
@@ -125,7 +163,7 @@ const DetectionModal = ({ detection, onClose }) => {
                   </svg>
                 }
               >
-                <div className="text-base font-semibold text-gray-900">{detection.location}</div>
+                <div className="text-base font-semibold text-gray-900">{record.location}</div>
               </DetailRow>
 
               <DetailRow
@@ -137,12 +175,15 @@ const DetectionModal = ({ detection, onClose }) => {
                 }
               >
                 <div className="flex flex-wrap gap-2">
-                  {detection.ppeItems.map((item) => (
-                    <PPEItemChip key={item} label={item} variant="present" />
+                  {ppeItems.map((item) => (
+                    <PPEItemChip key={`present-${item}`} label={item} variant="present" />
                   ))}
-                  {detection.missingItems.map((item) => (
-                    <PPEItemChip key={item} label={item} variant="missing" />
+                  {missingItems.map((item) => (
+                    <PPEItemChip key={`missing-${item}`} label={item} variant="missing" />
                   ))}
+                  {ppeItems.length === 0 && missingItems.length === 0 && (
+                    <span className="text-sm text-gray-400">No PPE items recorded</span>
+                  )}
                 </div>
               </DetailRow>
 
@@ -155,12 +196,16 @@ const DetectionModal = ({ detection, onClose }) => {
                 }
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-2xl font-bold text-gray-900">{confidence}%</span>
-                  <span className={`text-xs font-semibold ${getConfidenceColor(confidence)}`}>
-                    {getConfidenceLabel(confidence)}
+                  <span className="text-2xl font-bold text-gray-900">
+                    {Number.isFinite(confidence) ? `${confidence}%` : '—'}
                   </span>
+                  {Number.isFinite(confidence) && (
+                    <span className={`text-xs font-semibold ${getConfidenceColor(confidence)}`}>
+                      {getConfidenceLabel(confidence)}
+                    </span>
+                  )}
                 </div>
-                <ConfidenceBar value={confidence} size="lg" showLabel={false} />
+                <ConfidenceBar value={Number.isFinite(confidence) ? confidence : 0} size="lg" showLabel={false} />
               </DetailRow>
             </div>
           </div>

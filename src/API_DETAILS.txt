@@ -1,0 +1,476 @@
+================================================================================
+  PPE DETECTION SYSTEM — BACKEND API REFERENCE (ACTUAL / IMPLEMENTED)
+  For frontend <-> backend integration
+================================================================================
+
+Base URL (REST/SSE) : http://127.0.0.1:5000
+Base URL (WebSocket): ws://127.0.0.1:5000
+Auth                : NONE (no token/header required)
+Content-Type        : application/json (responses); requests are GET-only, no body
+
+NOTE: This file documents the endpoints that are actually implemented in the
+code. The two files in documents/ (API_DOCUMENTATION.txt, api_doc.txt) are the
+original design specs; where they differ, THIS file is authoritative.
+
+--------------------------------------------------------------------------------
+  RESPONSE ENVELOPE
+--------------------------------------------------------------------------------
+All /api/v1/* endpoints wrap their payload:
+
+  Success:
+  {
+    "success": true,
+    "message": "<human text>",
+    "data": <object or array>
+  }
+
+  Error (e.g. 404):
+  {
+    "success": false,
+    "message": "<reason>",
+    "error": { "code": "NOT_FOUND" }
+  }
+
+List endpoints add a "pagination" object alongside "data" (see /detections).
+
+The LEGACY endpoints (/stream_reports, /get_combined_report,
+/get_detection_counts, /get_detection_counters) do NOT use this envelope —
+they return raw arrays/objects as noted per endpoint.
+
+--------------------------------------------------------------------------------
+  COMMON ENUMS / CONVENTIONS
+--------------------------------------------------------------------------------
+period      : "daily" | "weekly" | "monthly"
+              (daily = last 1 day, weekly = last 7 days, monthly = last 30 days)
+status      : "violation" | "compliant" | "all"
+risk_level  : "high" (>=2 PPE items missing) | "medium" (1) | "under_control" (0)
+confidence  : float 0-100
+timestamp   : ISO-8601 string, e.g. "2026-06-12T10:15:30"
+PPE items   : "helmet", "apron" are REAL (detected today).
+              "gloves", "shoes", "goggles", "mobile" always return 0 (model has
+              only 3 classes: person / helmet / ppe_jacket; "apron" = vest/jacket).
+
+Valid camera_name values (for /cameras filtering and /ws/video):
+  "Scrap yard rooftop", "Engine Line", "Bolero Doc 2", "Bolero Dock PTZ",
+  "Plant 2 Dock Camera", "S1T Dock Toward PC Store", "S1T Store Near Old D2D Line"
+Areas (zones): "Scrap Yard", "Engine Line", "Bolero Dock", "Plant 2 Dock",
+               "S1T Dock", "S1T Store"
+
+
+================================================================================
+  A. HEALTH & OPERATIONS
+================================================================================
+
+--------------------------------------------------------------------------------
+A1. GET /
+--------------------------------------------------------------------------------
+Health check.
+Response (200, text/plain):
+  Flask app is running.
+
+--------------------------------------------------------------------------------
+A2. GET /cameras
+--------------------------------------------------------------------------------
+List configured cameras and whether each currently has a live feed (a frame
+published to Redis in the last ~10s).
+Response (200):
+{
+  "cameras": [
+    { "name": "Scrap yard rooftop", "online": true },
+    { "name": "Engine Line",        "online": false }
+  ]
+}
+
+--------------------------------------------------------------------------------
+A3. GET /start_backend
+--------------------------------------------------------------------------------
+Manually start the detection engine (idempotent).
+Response (200, text/plain):
+  Backend detection started successfully!
+  -- or --
+  Backend detection is already running.
+
+
+================================================================================
+  B. DASHBOARD  (prefix: /api/v1)
+================================================================================
+
+--------------------------------------------------------------------------------
+B1. GET /api/v1/dashboard/stats
+--------------------------------------------------------------------------------
+KPI cards + PPE breakdown.
+Query params:
+  period : daily | weekly | monthly   (optional, default "daily")
+Example:
+  GET /api/v1/dashboard/stats?period=weekly
+Response (200):
+{
+  "success": true,
+  "message": "Dashboard stats retrieved successfully",
+  "data": {
+    "totalDetections": 150,
+    "compliant": 105,
+    "violations": 45,
+    "complianceRate": 70.0,                  // (compliant/total)*100, 1 decimal
+    "ppeBreakdown": {
+      "helmet": 18, "gloves": 0, "apron": 9,
+      "mobile": 0, "shoes": 0, "goggles": 0
+    }
+  }
+}
+
+--------------------------------------------------------------------------------
+B2. GET /api/v1/dashboard/charts/incidents-over-time
+--------------------------------------------------------------------------------
+Violation counts bucketed over time.
+Query params:
+  viewMode  : weekly | monthly | custom   (optional, default "weekly")
+  startDate : YYYY-MM-DD   (required when viewMode=custom)
+  endDate   : YYYY-MM-DD   (required when viewMode=custom)
+Examples:
+  GET /api/v1/dashboard/charts/incidents-over-time?viewMode=weekly
+  GET /api/v1/dashboard/charts/incidents-over-time?viewMode=monthly
+  GET /api/v1/dashboard/charts/incidents-over-time?viewMode=custom&startDate=2026-06-01&endDate=2026-06-07
+
+Response (200) — weekly (last 7 days, labels = weekday):
+{
+  "success": true,
+  "message": "Incidents over time data retrieved successfully",
+  "data": {
+    "title": "Last 7 days",
+    "labels": ["Sat","Sun","Mon","Tue","Wed","Thu","Fri"],
+    "values": [3, 7, 5, 12, 8, 10, 6]
+  }
+}
+
+Response (200) — monthly (last 4 weeks):
+{
+  "success": true,
+  "message": "Incidents over time data retrieved successfully",
+  "data": {
+    "title": "Last 4 weeks",
+    "labels": ["Week 1","Week 2","Week 3","Week 4"],
+    "values": [25, 30, 18, 22]
+  }
+}
+
+Response (200) — custom (per-day in range, labels = weekday):
+{
+  "success": true,
+  "message": "Incidents over time data retrieved successfully",
+  "data": {
+    "title": "Jun 01 - Jun 07",
+    "labels": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],
+    "values": [4, 8, 6, 11, 9, 7, 5]
+  }
+}
+
+--------------------------------------------------------------------------------
+B3. GET /api/v1/dashboard/charts/area-wise
+--------------------------------------------------------------------------------
+Violation counts per work zone (top 6, sorted desc).
+Query params:
+  period : daily | weekly | monthly   (optional, default "monthly")
+Response (200):
+{
+  "success": true,
+  "message": "Area-wise incidents data retrieved successfully",
+  "data": [
+    { "area": "Engine Line",  "count": 12 },
+    { "area": "Bolero Dock",  "count": 9 },
+    { "area": "Plant 2 Dock", "count": 7 }
+  ]
+}
+
+--------------------------------------------------------------------------------
+B4. GET /api/v1/dashboard/charts/risk-level
+--------------------------------------------------------------------------------
+Risk distribution across ALL detections (compliant + violation) in the window.
+Query params:
+  period : daily | weekly | monthly   (optional, default "monthly")
+Response (200):  // always exactly these 3 entries, in this order
+{
+  "success": true,
+  "message": "Risk level data retrieved successfully",
+  "data": [
+    { "type": "High Risk",     "count": 8,  "color": "#ef4444" },
+    { "type": "Medium Risk",   "count": 14, "color": "#f59e0b" },
+    { "type": "Under Control", "count": 32, "color": "#10b981" }
+  ]
+}
+
+--------------------------------------------------------------------------------
+B5. GET /api/v1/dashboard/charts/camera-uptime
+--------------------------------------------------------------------------------
+Camera online/offline snapshot (online = published a frame recently). The hours
+are derived from the period length (no historical uptime log).
+Query params:
+  period : daily | weekly | monthly   (optional, default "monthly")
+Response (200):
+{
+  "success": true,
+  "message": "Camera uptime data retrieved successfully",
+  "data": {
+    "uptimePercent": 85.7,
+    "downtimePercent": 14.3,
+    "totalHours": 720,
+    "uptimeHours": 617,
+    "downtimeHours": 103,
+    "totalCameras": 7,
+    "onlineCameras": 6,
+    "offlineCameras": 1
+  }
+}
+
+--------------------------------------------------------------------------------
+B6. GET /api/v1/dashboard/charts/incident-type
+--------------------------------------------------------------------------------
+Counts by missing PPE item type (top 6, sorted desc, only items with count > 0).
+Query params:
+  period : daily | weekly | monthly   (optional, default "monthly")
+Response (200):
+{
+  "success": true,
+  "message": "Incident type data retrieved successfully",
+  "data": [
+    { "type": "PPE - No Hard Hat",   "count": 18 },
+    { "type": "PPE - No Safety Vest","count": 9 }
+  ]
+}
+(Possible "type" values: "PPE - No Hard Hat", "PPE - No Safety Vest",
+ "PPE - No Safety Gloves", "PPE - No Safety Boots", "PPE - No Goggles",
+ "PPE - Mobile Usage")
+
+
+================================================================================
+  C. DETECTIONS  (prefix: /api/v1)
+================================================================================
+
+DETECTION OBJECT (shared by C1, C2, C3):
+{
+  "id": 42,                                  // integer
+  "timestamp": "2026-06-12T10:15:30",
+  "location": "Engine Line",                 // area, falls back to camera_name
+  "status": "violation",                     // "violation" | "compliant"
+  "confidence": 91.2,                         // 0-100
+  "ppeItems": ["apron"],                      // PPE present (of helmet/apron)
+  "missingItems": ["helmet"],                 // PPE missing
+  "imageUrl": "data:image/jpeg;base64,/9j/4AAQ..."  // or null if no image
+}
+NOTE: imageUrl is a base64 DATA URI (image is stored in the DB, not on a CDN).
+Compliant rows have no image -> imageUrl = null.
+
+--------------------------------------------------------------------------------
+C1. GET /api/v1/detections
+--------------------------------------------------------------------------------
+Paginated detections table.
+Query params (all optional):
+  status    : violation | compliant | all   (default "violation")
+  page      : integer >= 1                   (default 1)
+  limit     : integer >= 1                   (default 10)
+  sortBy    : time | area | severity | confidence   (default "time")
+  sortOrder : ASC | DESC                      (default "DESC")
+Example:
+  GET /api/v1/detections?status=violation&page=1&limit=10&sortBy=time&sortOrder=DESC
+Response (200):
+{
+  "success": true,
+  "message": "Detections retrieved successfully",
+  "data": [ { <DETECTION OBJECT> }, { <DETECTION OBJECT> } ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 45,
+    "totalPages": 5
+  }
+}
+
+--------------------------------------------------------------------------------
+C2. GET /api/v1/detections/<id>
+--------------------------------------------------------------------------------
+Single detection detail (for the modal). <id> is the integer detection id.
+Example:
+  GET /api/v1/detections/42
+Response (200):
+{
+  "success": true,
+  "message": "Detection retrieved successfully",
+  "data": { <DETECTION OBJECT> }
+}
+Response (404):
+{
+  "success": false,
+  "message": "Detection not found",
+  "error": { "code": "NOT_FOUND" }
+}
+
+--------------------------------------------------------------------------------
+C3. GET /api/v1/detections/stream     (Server-Sent Events)
+--------------------------------------------------------------------------------
+Live stream of NEW violations. Open with EventSource; listen for the
+"new-detection" event.
+Request headers:
+  Accept: text/event-stream
+Stream message format (repeats as new violations arrive):
+  event: new-detection
+  data: { <DETECTION OBJECT> }
+
+Frontend example:
+  const es = new EventSource(`${BASE_URL}/api/v1/detections/stream`);
+  es.addEventListener("new-detection", e => {
+    const detection = JSON.parse(e.data);
+    // prepend to table...
+  });
+
+
+================================================================================
+  D. LIVE VIDEO  (WebSocket)
+================================================================================
+
+--------------------------------------------------------------------------------
+D1. WS /ws/video/<camera_name>
+--------------------------------------------------------------------------------
+Streams one camera's annotated frames as BINARY JPEG (one JPEG per message).
+URL-encode spaces in the camera name.
+Example URL:
+  ws://127.0.0.1:5000/ws/video/Engine%20Line
+
+Server -> client : binary Blob (a complete JPEG image), ~10 fps, sent only when
+                   the frame changes.
+Client -> server : nothing required.
+
+Frontend example:
+  const ws = new WebSocket(`${WS_URL}/ws/video/${encodeURIComponent(name)}`);
+  ws.binaryType = "blob";
+  ws.onmessage = (e) => {
+    const url = URL.createObjectURL(e.data);   // e.data is a Blob (JPEG)
+    imgEl.src = url;
+    // revoke the previous object URL to avoid leaks
+  };
+(A camera with no live feed simply sends nothing; check /cameras for status.)
+
+
+================================================================================
+  E. LEGACY ENDPOINTS  (no /api/v1 prefix, no success envelope)
+================================================================================
+Kept for the existing pages. Use the /api/v1 endpoints above for new work.
+
+--------------------------------------------------------------------------------
+E1. GET /stream_reports     (Server-Sent Events)
+--------------------------------------------------------------------------------
+SSE of TODAY's new violation rows (raw DB rows). Default SSE "message" event.
+Stream message format:
+  data: {
+    "id": 42,
+    "camera_name": "Engine Line",
+    "area": "Engine Line",
+    "timestamp": "2026-06-12T10:15:30",
+    "image_path": "/9j/4AAQ...",          // base64 JPEG
+    "status": "violation",
+    "missing_items": "helmet",
+    "risk_level": "medium",
+    "confidence": 91.2,
+    "created_at": "2026-06-12T10:15:31",
+    "image": "/9j/4AAQ...",                // alias of image_path
+    "image_base64": "/9j/4AAQ..."          // alias of image_path
+  }
+Frontend:
+  const es = new EventSource(`${BASE_URL}/stream_reports`);
+  es.onmessage = (e) => { const row = JSON.parse(e.data); ... };
+
+--------------------------------------------------------------------------------
+E2. GET /get_combined_report
+--------------------------------------------------------------------------------
+Paginated/filtered report rows.
+Query params (all optional):
+  camera_name : exact camera name, or "all"  (default "all")
+  start_date  : "YYYY-MM-DD" or ISO datetime  (optional)
+  end_date    : "YYYY-MM-DD" or ISO datetime  (optional)
+  page        : integer (default 1)
+  limit       : integer (default 10)
+Example:
+  GET /get_combined_report?page=1&limit=10&camera_name=all&start_date=2026-06-01&end_date=2026-06-30
+Response (200):
+{
+  "data": [
+    {
+      "id": 42,
+      "camera_name": "Engine Line",
+      "area": "Engine Line",
+      "timestamp": "2026-06-12T10:15:30",
+      "image_path": "/9j/4AAQ...",
+      "status": "violation",
+      "missing_items": "helmet",
+      "risk_level": "medium",
+      "confidence": 91.2,
+      "created_at": "2026-06-12T10:15:31",
+      "image": "/9j/4AAQ...",
+      "image_base64": "/9j/4AAQ..."
+    }
+  ],
+  "pagination": {
+    "current_page": 1,
+    "per_page": 10,
+    "total_records": 45,
+    "total_pages": 5
+  }
+}
+Error (400): { "error": "Invalid pagination parameters: ..." }
+
+--------------------------------------------------------------------------------
+E3. GET /get_detection_counts
+--------------------------------------------------------------------------------
+Per-camera violation counts in a date range.
+Query params:
+  start_date : datetime (required)
+  end_date   : datetime (required)
+Response (200) — raw array:
+[
+  { "camera_name": "Engine Line", "non_helmet_count": 12 },
+  { "camera_name": "Bolero Doc 2", "non_helmet_count": 7 }
+]
+Error: { "error": "<message>" }
+
+--------------------------------------------------------------------------------
+E4. GET /get_detection_counters
+--------------------------------------------------------------------------------
+Per-camera violation counts + last update, ordered by most recent.
+Query params:
+  start_date : "YYYY-MM-DD" (required)
+  end_date   : "YYYY-MM-DD" (required)
+Response (200):
+{
+  "detection_counters": [
+    { "camera_name": "Engine Line", "non_helmet_count": 12, "last_updated": "2026-06-12T10:15:30" }
+  ]
+}
+Error (400): { "error": "start_date and end_date are required parameters" }
+Error (400): { "error": "Invalid date format. Use YYYY-MM-DD" }
+
+
+================================================================================
+  F. HTTP STATUS CODES
+================================================================================
+  200  OK
+  400  Bad Request   (missing/invalid query params)
+  404  Not Found     (detection id does not exist)
+  500  Internal Server Error
+
+================================================================================
+  G. FRONTEND INTEGRATION NOTES
+================================================================================
+- No authentication: do NOT send an Authorization header.
+- CORS is enabled (flask_cors) — calls from the React dev server are allowed.
+- Two SSE feeds exist: /api/v1/detections/stream (new, envelope-shaped objects,
+  "new-detection" event) and /stream_reports (legacy, raw rows, default event).
+  Prefer the /api/v1 one for new code.
+- Charts default to period=monthly; stats defaults to period=daily;
+  incidents-over-time defaults to viewMode=weekly.
+- complianceRate is sampled (one event per person per 5-min cooldown), not a
+  per-frame count — treat it as a trend, not an exact ratio.
+- gloves/shoes/goggles/mobile are always 0 until the model is retrained.
+- Live video frames are binary JPEG over WebSocket; render via Blob + object URL.
+
+================================================================================
+  END
+================================================================================
