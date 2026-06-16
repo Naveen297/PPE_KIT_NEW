@@ -86,8 +86,18 @@ function AppContent() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [currentView, setCurrentView] = useState('dashboard');
   const [period, setPeriod] = useState('weekly');
+  const [customRange, setCustomRange] = useState({ startDate: '', endDate: '' });
 
-  const stats = useApiResource((signal) => getDashboardStats(period, signal), [period]);
+  // Only send dates once a full custom range is chosen, so we don't refetch
+  // on every half-completed selection.
+  const customReady =
+    period === 'custom' && customRange.startDate && customRange.endDate;
+  const statsRange = customReady ? customRange : {};
+
+  const stats = useApiResource(
+    (signal) => getDashboardStats(period, statsRange, signal),
+    [period, customReady ? customRange.startDate : '', customReady ? customRange.endDate : ''],
+  );
 
   const handleViewDetails = useCallback((d) => setSelectedDetection(d), []);
   const handleCloseModal = useCallback(() => setSelectedDetection(null), []);
@@ -126,7 +136,12 @@ function AppContent() {
                     Real-time PPE compliance monitoring · AI-powered detection
                   </p>
                 </div>
-                <PeriodTabs value={period} onChange={setPeriod} />
+                <PeriodTabs
+                  value={period}
+                  onChange={setPeriod}
+                  customRange={customRange}
+                  onCustomRangeChange={setCustomRange}
+                />
               </div>
 
               <StatsSection

@@ -26,11 +26,20 @@ export const startBackend = (signal) =>
 
 /* ─────────────────────────────── B. Dashboard ───────────────────────────── */
 
-/** B1 — KPI cards + PPE breakdown. period: daily|weekly|monthly. */
-export const getDashboardStats = (period = 'daily', signal) =>
-  request('/api/v1/dashboard/stats', { params: { period }, signal }).then(
-    (r) => r.data,
-  );
+/**
+ * B1 — KPI cards + PPE breakdown.
+ * period: daily|weekly|monthly|custom. When period is 'custom', pass
+ * startDate/endDate (YYYY-MM-DD); empty values are dropped by the client.
+ */
+export const getDashboardStats = (
+  period = 'daily',
+  { startDate, endDate } = {},
+  signal,
+) =>
+  request('/api/v1/dashboard/stats', {
+    params: { period, startDate, endDate },
+    signal,
+  }).then((r) => r.data);
 
 /** B2 — violation counts bucketed over time. */
 export const getIncidentsOverTime = (
