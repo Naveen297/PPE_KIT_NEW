@@ -30,7 +30,7 @@ export default defineConfig({
     exclude: ['node_modules', 'dist', '.idea', '.git', '.cache'],
   },
   server: {
-    port: 3000,
+    port: 5000,
     open: true,
   },
   build: {

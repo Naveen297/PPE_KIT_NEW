@@ -1,5 +1,39 @@
 import mahindraLogo from '@/assets/MAI_Logo.png';
+import { useApiResource } from '@/hooks';
+import { getDateTime } from '@/api';
 import NavTabs from './NavTabs';
+
+/**
+ * Normalise whatever shape `/datetime` returns into a short display string.
+ * Tolerates a bare string, `{ datetime }`, `{ timestamp }`, or `{ date, time }`.
+ * Returns `null` when nothing usable is present so the caller can fall back.
+ */
+const formatStamp = (raw) => {
+  if (!raw) return null;
+  const p = raw.data ?? raw;
+
+  let value =
+    typeof p === 'string'
+      ? p
+      : p.datetime ?? p.dateTime ?? p.timestamp ?? p.now ?? p.current ?? null;
+
+  if (!value && typeof p === 'object' && (p.date || p.time)) {
+    return [p.date, p.time].filter(Boolean).join(' ');
+  }
+  if (!value) return null;
+
+  const d = new Date(value);
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleString(undefined, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+  return String(value);
+};
 
 /**
  * Application header — glassmorphism design, compact single-row layout.
@@ -10,6 +44,8 @@ import NavTabs from './NavTabs';
  * @param {(view: string) => void} props.onNavigate - Navigation callback.
  */
 const Header = ({ onDownloadReport, currentView, onNavigate }) => {
+  const { data, loading, error } = useApiResource(getDateTime);
+  const stamp = formatStamp(data);
 
   return (
     <header className="sticky top-2 z-40 rounded-2xl border border-ink-200/70 bg-white/85 shadow-card backdrop-blur-xl supports-[backdrop-filter]:bg-white/70">
@@ -52,6 +88,20 @@ const Header = ({ onDownloadReport, currentView, onNavigate }) => {
 
         {/* ── Controls ── */}
         <div className="flex items-center gap-2 ml-auto">
+          {/* Last updated stamp */}
+          <div className="hidden md:flex flex-col items-end rounded-lg border border-ink-200/70 bg-white/70 px-2.5 py-1 leading-tight shadow-xs">
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-ink-400">
+              Last Updated
+            </span>
+            <span
+              className={`tnum text-[11px] font-bold ${
+                error || (!loading && !stamp) ? 'text-red-500' : 'text-ink-700'
+              }`}
+            >
+              {loading ? 'Loading…' : stamp ?? 'Unable to fetch'}
+            </span>
+          </div>
+
           <NavTabs currentView={currentView} onNavigate={onNavigate} />
 
           {/* Report button */}

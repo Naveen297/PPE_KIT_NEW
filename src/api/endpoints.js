@@ -24,6 +24,13 @@ export const getCameras = (signal) =>
 export const startBackend = (signal) =>
   request('/start_backend', { signal, raw: true }).then((r) => r.text());
 
+/**
+ * A4 — current server date/time, used for the header "last updated" stamp.
+ * Returns the raw body (string or object) so callers can normalise whatever
+ * shape the backend sends; transparently unwraps the `{success,data}` envelope.
+ */
+export const getDateTime = (signal) => request('/datetime', { signal });
+
 /* ─────────────────────────────── B. Dashboard ───────────────────────────── */
 
 /**
