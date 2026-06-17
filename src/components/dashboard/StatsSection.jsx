@@ -1,86 +1,87 @@
-import { usePPEStats } from '@/hooks';
-import { StatCard } from '@/components/ui';
+import { ScanEye, ShieldAlert } from 'lucide-react';
+import { StatCard, DataState } from '@/components/ui';
 import PPEBreakdownRow from './PPEBreakdownRow';
 
-/** Stat card definitions — kept outside render to avoid recreation. */
-const buildCards = (stats) => [
-  {
-    title: 'Total Detections',
-    value: stats.total,
-    gradient: 'from-blue-500 to-blue-600',
-    bgColor: 'bg-blue-50',
-    borderColor: 'border-blue-200',
-    icon: (
-      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Compliant',
-    value: stats.compliant,
-    gradient: 'from-green-500 to-green-600',
-    bgColor: 'bg-green-50',
-    borderColor: 'border-green-200',
-    valueColor: 'text-green-700',
-    showTrend: true,
-    trendUp: true,
-    icon: (
-      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Violations',
-    value: stats.violations,
-    gradient: 'from-red-500 to-red-600',
-    bgColor: 'bg-red-50',
-    borderColor: 'border-red-200',
-    valueColor: 'text-red-700',
-    showTrend: true,
-    trendUp: false,
-    icon: (
-      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Compliance Rate',
-    value: `${stats.complianceRate}%`,
-    gradient: 'from-orange-500 to-orange-600',
-    bgColor: 'bg-orange-50',
-    borderColor: 'border-orange-200',
-    showTrend: stats.complianceRate >= 75,
-    trendUp: stats.complianceRate >= 75,
-    icon: (
-      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-      </svg>
-    ),
-  },
-];
+const ACCENTS = {
+  brand: { iconBg: 'bg-brand-50', iconText: 'text-brand-600', stroke: '#2459eb', gradientId: 'spark-brand' },
+  emerald: { iconBg: 'bg-emerald-50', iconText: 'text-emerald-600', stroke: '#16a34a', gradientId: 'spark-emerald' },
+  rose: { iconBg: 'bg-rose-50', iconText: 'text-rose-600', stroke: '#ef4444', gradientId: 'spark-rose' },
+  violet: { iconBg: 'bg-violet-50', iconText: 'text-violet-600', stroke: '#7c3aed', gradientId: 'spark-violet' },
+};
+
+const EMPTY_BREAKDOWN = { helmet: 0, gloves: 0, apron: 0, mobile: 0, shoes: 0, goggles: 0 };
+
+const num = (v) => Number(v ?? 0).toLocaleString('en-IN');
+
+/** Shimmer placeholder for a KPI card while stats load. */
+const CardSkeleton = () => (
+  <div className="rounded-xl border border-ink-200/70 bg-white p-3.5 shadow-card">
+    <div className="flex items-center gap-2.5">
+      <div className="skeleton h-9 w-9 rounded-lg" />
+      <div className="skeleton h-3 w-24 rounded" />
+    </div>
+    <div className="skeleton mt-3 h-7 w-20 rounded" />
+  </div>
+);
 
 /**
- * StatsSection — KPI summary cards + per-item PPE breakdown.
+ * StatsSection — KPI summary row + per-item PPE breakdown, driven by the
+ * `/api/v1/dashboard/stats` payload. Purely presentational: data, loading and
+ * error are owned by the parent so the page can react to connection health.
  *
  * @param {Object} props
- * @param {{ total, compliant, violations, complianceRate }} props.stats
- * @param {Array}  props.detections - Full detections array for item breakdown.
+ * @param {Object|null} props.stats - Dashboard stats payload (or null).
+ * @param {boolean} props.loading
+ * @param {Error|null} props.error
+ * @param {() => void} [props.onRetry]
  */
-const StatsSection = ({ stats, detections = [] }) => {
-  const itemCounts = usePPEStats(detections);
-  const cards = buildCards(stats);
+const StatsSection = ({ stats, loading, error, onRetry }) => {
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
+        <div className="skeleton h-32 rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-ink-200/70 bg-white p-5 shadow-card">
+        <DataState error={error} onRetry={onRetry} className="min-h-[140px]">
+          {null}
+        </DataState>
+      </div>
+    );
+  }
+
+  const cards = [
+    {
+      label: 'Total Detections',
+      value: num(stats?.totalDetections),
+      icon: <ScanEye className="h-5 w-5" />,
+      accent: ACCENTS.brand,
+    },
+    {
+      label: 'Violations',
+      value: num(stats?.violations),
+      icon: <ShieldAlert className="h-5 w-5" />,
+      accent: ACCENTS.rose,
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
         {cards.map((card) => (
-          <StatCard key={card.title} {...card} />
+          <StatCard key={card.label} {...card} />
         ))}
       </div>
-      <PPEBreakdownRow itemCounts={itemCounts} />
+      <PPEBreakdownRow itemCounts={stats?.ppeBreakdown ?? EMPTY_BREAKDOWN} />
     </div>
   );
 };

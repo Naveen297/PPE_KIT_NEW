@@ -1,80 +1,100 @@
 import { useMemo } from 'react';
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
+import { ShieldHalf } from 'lucide-react';
+import { Card, CardHeader, DataState } from '@/components/ui';
+import { useApiResource } from '@/hooks';
+import { getRiskLevel } from '@/api';
+import ChartTooltip from '@/lib/chart/ChartTooltip';
 
 /**
- * RiskLevelChart — Pie chart showing distribution of risk levels.
- * Derived from real detections: violations with many missing items = high risk.
+ * RiskLevelChart — donut distribution of risk levels from
+ * `GET /api/v1/dashboard/charts/risk-level` (always 3 entries:
+ * High Risk / Medium Risk / Under Control, each with its own colour).
  *
  * @param {Object} props
- * @param {Array}  props.detections - Detection records.
+ * @param {'daily'|'weekly'|'monthly'} [props.period='monthly']
  */
-const RISK_CONFIG = [
-  { type: 'High Risk',     color: '#ef4444', threshold: 2 },   // ≥2 missing items
-  { type: 'Medium Risk',   color: '#f59e0b', threshold: 1 },   // 1 missing item
-  { type: 'Under Control', color: '#10b981', threshold: 0 },   // compliant
-];
+const RiskLevelChart = ({ period = 'monthly' }) => {
+  const { data, loading, error, refetch } = useApiResource(
+    (signal) => getRiskLevel(period, signal),
+    [period],
+  );
 
-const CHART_SIZE   = 140;
-const STROKE_WIDTH = 30;
-const RADIUS       = (CHART_SIZE - STROKE_WIDTH) / 2;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+  const rows = useMemo(
+    () =>
+      (data ?? []).map((d) => ({
+        name: d.type,
+        value: d.count ?? 0,
+        fill: d.color,
+      })),
+    [data],
+  );
 
-const RiskLevelChart = ({ detections }) => {
-  const riskCounts = useMemo(() => {
-    let high = 0, medium = 0, underControl = 0;
-    detections.forEach((d) => {
-      const missing = d.missingItems?.length ?? 0;
-      if (missing >= 2) high++;
-      else if (missing === 1) medium++;
-      else underControl++;
-    });
-    return [high, medium, underControl];
-  }, [detections]);
-
-  const total = riskCounts.reduce((s, v) => s + v, 0) || 1;
-  let offset = 0;
+  const total = rows.reduce((sum, r) => sum + r.value, 0);
+  const control = rows.find((r) => /control/i.test(r.name))?.value ?? 0;
+  const controlPct = total > 0 ? Math.round((control / total) * 100) : 0;
 
   return (
-    <div className="h-full p-5 bg-white border border-gray-200 shadow-md rounded-2xl">
-      <h3 className="mb-2 text-sm font-bold text-gray-800">Level of Risk</h3>
-      <p className="mb-4 text-xs text-gray-500">Pie Chart • Unit: Numbers</p>
-
-      <div className="relative w-36 h-36 mx-auto">
-        <svg viewBox={`0 0 ${CHART_SIZE} ${CHART_SIZE}`} className="transform -rotate-90">
-          {RISK_CONFIG.map(({ type, color }, i) => {
-            const pct = riskCounts[i] / total;
-            const dash = `${pct * CIRCUMFERENCE} ${CIRCUMFERENCE}`;
-            const dashOffset = -offset;
-            offset += pct * CIRCUMFERENCE;
-            return (
-              <circle
-                key={type}
-                cx={CHART_SIZE / 2}
-                cy={CHART_SIZE / 2}
-                r={RADIUS}
-                fill="none"
-                stroke={color}
-                strokeWidth={STROKE_WIDTH}
-                strokeDasharray={dash}
-                strokeDashoffset={dashOffset}
-                className="transition-all duration-500"
-              />
-            );
-          })}
-        </svg>
-      </div>
-
-      <div className="flex flex-col gap-2 mt-4">
-        {RISK_CONFIG.map(({ type, color }, i) => (
-          <div key={type} className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded" style={{ backgroundColor: color }} />
-              <span className="text-xs font-medium text-gray-700">{type}</span>
+    <Card>
+      <CardHeader
+        title="Risk Distribution"
+        subtitle="By severity of PPE gaps"
+        icon={<ShieldHalf className="h-[18px] w-[18px]" />}
+      />
+      <div className="mt-4 min-h-[150px] flex-1">
+        <DataState loading={loading} error={error} onRetry={refetch} className="min-h-[150px]">
+          <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+            <div className="relative h-[150px] w-[150px] flex-shrink-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={total > 0 ? rows : [{ name: 'No data', value: 1, fill: '#eef1f6' }]}
+                    dataKey="value"
+                    innerRadius={48}
+                    outerRadius={70}
+                    paddingAngle={total > 0 ? 2 : 0}
+                    stroke="none"
+                    startAngle={90}
+                    endAngle={-270}
+                    animationDuration={650}
+                  >
+                    {(total > 0 ? rows : [{ fill: '#eef1f6' }]).map((entry, i) => (
+                      <Cell key={i} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  {total > 0 && <Tooltip content={<ChartTooltip />} />}
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                <span className="tnum font-display text-2xl font-extrabold leading-none text-ink-900">{total}</span>
+                <span className="mt-0.5 text-2xs font-semibold uppercase tracking-wide text-ink-400">events</span>
+              </div>
             </div>
-            <span className="text-xs font-semibold text-gray-800">{riskCounts[i]}</span>
+
+            <div className="w-full flex-1 space-y-2">
+              {rows.map((r) => {
+                const pct = total > 0 ? Math.round((r.value / total) * 100) : 0;
+                return (
+                  <div key={r.name} className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2 text-xs font-medium text-ink-600">
+                      <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: r.fill }} />
+                      {r.name}
+                    </span>
+                    <span className="tnum text-xs font-bold text-ink-900">
+                      {r.value}
+                      <span className="ml-1 font-medium text-ink-400">{pct}%</span>
+                    </span>
+                  </div>
+                );
+              })}
+              <div className="mt-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-2xs font-semibold text-emerald-700">
+                {controlPct}% of detections are under control
+              </div>
+            </div>
           </div>
-        ))}
+        </DataState>
       </div>
-    </div>
+    </Card>
   );
 };
 

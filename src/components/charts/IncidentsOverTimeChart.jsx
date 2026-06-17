@@ -1,175 +1,189 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import {
+  Area,
+  CartesianGrid,
+  ComposedChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { Activity, Calendar, ChevronDown, LineChart as LineIcon } from 'lucide-react';
+import { Card, CardHeader, EmptyState, DataState } from '@/components/ui';
+import { useApiResource, useClickOutside } from '@/hooks';
+import { getIncidentsOverTime } from '@/api';
+import { CHART, axisProps, lineCursor } from '@/lib/chart/theme';
+import ChartTooltip from '@/lib/chart/ChartTooltip';
 
 const VIEW_MODES = [
-  { id: 'weekly',  label: 'Weekly' },
-  { id: 'monthly', label: 'Monthly' },
-  { id: 'custom',  label: 'Custom' },
+  { id: 'weekly', label: 'Last 7 days' },
+  { id: 'monthly', label: 'Last 4 weeks' },
+  { id: 'custom', label: 'Custom range' },
 ];
 
 /**
- * Groups detections by day-of-week (weekly) or by week number (monthly).
- * Falls back to seed data if no detections available.
+ * IncidentsOverTimeChart — violation trend from
+ * `GET /api/v1/dashboard/charts/incidents-over-time`. The viewMode picker maps
+ * directly onto the backend's weekly | monthly | custom modes.
  */
-const buildChartData = (detections, viewMode, startDate, endDate) => {
-  if (viewMode === 'weekly') {
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const counts = Array(7).fill(0);
-    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    detections
-      .filter((d) => new Date(d.timestamp) >= oneWeekAgo)
-      .forEach((d) => { counts[new Date(d.timestamp).getDay()]++; });
-    return days.map((day, i) => ({ day, count: counts[i] }));
-  }
+const IncidentsOverTimeChart = () => {
+  const [viewMode, setViewMode] = useState('weekly');
+  const [open, setOpen] = useState(false);
+  const [custom, setCustom] = useState({ start: '', end: '' });
+  const ref = useClickOutside(() => setOpen(false));
 
-  if (viewMode === 'monthly') {
-    const weeks = [0, 0, 0, 0];
-    const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    detections
-      .filter((d) => new Date(d.timestamp) >= oneMonthAgo)
-      .forEach((d) => {
-        const daysAgo = Math.floor((Date.now() - new Date(d.timestamp)) / (24 * 60 * 60 * 1000));
-        const weekIdx = Math.min(3, Math.floor(daysAgo / 7));
-        weeks[3 - weekIdx]++;
-      });
-    return weeks.map((count, i) => ({ day: `Week ${i + 1}`, count }));
-  }
+  // Custom mode only fires once both ends of the range are chosen.
+  const customReady = viewMode !== 'custom' || (custom.start && custom.end);
+  const params =
+    viewMode === 'custom'
+      ? { viewMode, startDate: custom.start, endDate: custom.end }
+      : { viewMode };
 
-  if (viewMode === 'custom' && startDate && endDate) {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const daysDiff = Math.ceil((end - start) / (24 * 60 * 60 * 1000)) + 1;
-    const filtered = detections.filter((d) => {
-      const t = new Date(d.timestamp);
-      return t >= start && t <= end;
-    });
-
-    if (daysDiff <= 7) {
-      return Array.from({ length: daysDiff }, (_, i) => {
-        const date = new Date(start);
-        date.setDate(start.getDate() + i);
-        const dayLabel = date.toLocaleDateString('en-US', { weekday: 'short' });
-        const count = filtered.filter((d) => new Date(d.timestamp).toDateString() === date.toDateString()).length;
-        return { day: dayLabel, count };
-      });
-    }
-
-    const weeks = Math.ceil(daysDiff / 7);
-    return Array.from({ length: weeks }, (_, i) => ({
-      day: `Week ${i + 1}`,
-      count: filtered.filter((d) => {
-        const daysFromStart = Math.floor((new Date(d.timestamp) - start) / (24 * 60 * 60 * 1000));
-        return daysFromStart >= i * 7 && daysFromStart < (i + 1) * 7;
-      }).length,
-    }));
-  }
-
-  return [];
-};
-
-/**
- * IncidentsOverTimeChart — Bar chart of detection counts over a time window.
- * Derived from real `detections` data.
- *
- * @param {Object} props
- * @param {Array}  props.detections - Detection records from context.
- */
-const IncidentsOverTimeChart = ({ detections }) => {
-  const [viewMode, setViewMode]         = useState('weekly');
-  const [startDate, setStartDate]       = useState('');
-  const [endDate, setEndDate]           = useState('');
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [dateError, setDateError]       = useState(null);
-
-  const data = useMemo(
-    () => buildChartData(detections, viewMode, startDate, endDate),
-    [detections, viewMode, startDate, endDate],
+  const { data, loading, error, refetch } = useApiResource(
+    (signal) => getIncidentsOverTime(params, signal),
+    [viewMode, custom.start, custom.end],
+    { enabled: Boolean(customReady) },
   );
 
-  const maxValue = data.length > 0 ? Math.max(...data.map((d) => d.count), 1) : 1;
+  const series = useMemo(() => {
+    const labels = data?.labels ?? [];
+    const values = data?.values ?? [];
+    return labels.map((label, i) => ({ label, violations: values[i] ?? 0 }));
+  }, [data]);
 
-  const getTitle = () => {
-    if (viewMode === 'weekly') return 'Last 7 days';
-    if (viewMode === 'monthly') return 'Last 4 weeks';
-    if (viewMode === 'custom' && startDate && endDate) {
-      return `${new Date(startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date(endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-    }
-    return 'Select date range';
-  };
-
-  const handleApplyCustomRange = () => {
-    if (!startDate || !endDate) { setDateError('Both dates are required.'); return; }
-    if (new Date(endDate) < new Date(startDate)) { setDateError('End date must be after start date.'); return; }
-    setDateError(null);
-    setShowDatePicker(false);
-  };
+  const total = series.reduce((sum, d) => sum + d.violations, 0);
+  const hasData = series.some((d) => d.violations > 0);
+  const activeLabel = VIEW_MODES.find((m) => m.id === viewMode)?.label ?? 'Custom';
+  const subtitle = data?.title
+    ? `${data.title} · ${total} violations`
+    : 'Violation incidents bucketed over time';
 
   return (
-    <div className="relative h-full p-5 bg-white border border-gray-200 shadow-md rounded-2xl">
-      <div className="flex items-start justify-between mb-2">
-        <div>
-          <h3 className="text-sm font-bold text-gray-800">Number of Incidents</h3>
-          <p className="mt-1 text-xs text-gray-500">Bar Graph • {getTitle()} • Unit: Numbers</p>
-        </div>
-        <div className="flex gap-1">
-          {VIEW_MODES.map(({ id, label }) => (
+    <Card>
+      <CardHeader
+        title="Incidents Over Time"
+        subtitle={subtitle}
+        icon={<Activity className="h-[18px] w-[18px]" />}
+        actions={
+          <div className="relative" ref={ref}>
             <button
-              key={id}
-              onClick={() => { setViewMode(id); setShowDatePicker(id === 'custom' ? !showDatePicker : false); }}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
-                viewMode === id ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              className="flex h-9 items-center gap-2 rounded-lg border border-ink-200 bg-white px-3 text-xs font-semibold text-ink-700 shadow-xs transition-colors hover:bg-ink-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40"
+              aria-haspopup="listbox"
+              aria-expanded={open}
             >
-              {label}
+              <Calendar className="h-3.5 w-3.5 text-ink-400" aria-hidden="true" />
+              {activeLabel}
+              <ChevronDown className={`h-3.5 w-3.5 text-ink-400 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
             </button>
-          ))}
-        </div>
+
+            {open && (
+              <div className="absolute right-0 z-20 mt-2 w-56 origin-top-right animate-scale-in rounded-xl border border-ink-200 bg-white p-1.5 shadow-elevated" role="listbox">
+                {VIEW_MODES.map((m) => (
+                  <button
+                    key={m.id}
+                    role="option"
+                    aria-selected={viewMode === m.id}
+                    onClick={() => {
+                      setViewMode(m.id);
+                      if (m.id !== 'custom') setOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-medium transition-colors ${
+                      viewMode === m.id ? 'bg-brand-50 text-brand-700' : 'text-ink-600 hover:bg-ink-50'
+                    }`}
+                  >
+                    {m.label}
+                    {viewMode === m.id && <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />}
+                  </button>
+                ))}
+
+                {viewMode === 'custom' && (
+                  <div className="mt-1 space-y-2 border-t border-ink-100 p-2">
+                    {[['start', 'From'], ['end', 'To']].map(([key, lbl]) => (
+                      <label key={key} className="block">
+                        <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-400">{lbl}</span>
+                        <input
+                          type="date"
+                          value={custom[key]}
+                          onChange={(e) => setCustom((c) => ({ ...c, [key]: e.target.value }))}
+                          className="w-full rounded-lg border border-ink-200 px-2.5 py-1.5 text-xs text-ink-700 focus:border-brand-400 focus:outline-none"
+                        />
+                      </label>
+                    ))}
+                    <button
+                      onClick={() => setOpen(false)}
+                      disabled={!custom.start || !custom.end}
+                      className="w-full rounded-lg bg-brand-600 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Apply range
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        }
+      />
+
+      <div className="mt-4 flex items-center gap-4">
+        <span className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-500">
+          <span className="h-2 w-2.5 rounded-sm" style={{ backgroundColor: CHART.negative }} />
+          Violations
+        </span>
       </div>
 
-      {showDatePicker && (
-        <div className="absolute right-5 top-16 z-10 p-4 bg-white border-2 border-gray-200 rounded-xl shadow-lg w-72">
-          {[['Start Date', startDate, setStartDate], ['End Date', endDate, setEndDate]].map(([label, val, setter]) => (
-            <div key={label} className="mb-3">
-              <label className="block mb-1 text-xs font-semibold text-gray-700">{label}</label>
-              <input
-                type="date"
-                value={val}
-                onChange={(e) => { setter(e.target.value); setDateError(null); }}
-                className="w-full px-3 py-2 text-sm border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+      <div className="mt-3 h-[248px] w-full">
+        {viewMode === 'custom' && !customReady ? (
+          <EmptyState
+            icon={Calendar}
+            title="Select a date range"
+            description="Pick a start and end date to load incidents."
+            className="h-full"
+          />
+        ) : (
+          <DataState
+            loading={loading}
+            error={error}
+            onRetry={refetch}
+            empty={!hasData}
+            emptyState={
+              <EmptyState
+                icon={LineIcon}
+                title="No incidents in this range"
+                description="Try a wider range or a different view."
+                className="h-full"
               />
-            </div>
-          ))}
-          {dateError && <p className="mb-2 text-xs text-red-600 font-medium">{dateError}</p>}
-          <div className="flex gap-2">
-            <button onClick={handleApplyCustomRange} className="flex-1 px-3 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Apply</button>
-            <button onClick={() => setShowDatePicker(false)} className="flex-1 px-3 py-2 text-xs font-semibold text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
-          </div>
-        </div>
-      )}
-
-      {data.length > 0 ? (
-        <div className="flex items-end justify-around gap-2 mt-4" style={{ height: '200px' }}>
-          {data.map((item) => {
-            const heightPct = (item.count / maxValue) * 100;
-            return (
-              <div key={item.day} className="flex flex-col items-center justify-end flex-1 h-full gap-2">
-                <div className="text-xs font-semibold text-gray-700">{item.count}</div>
-                <div
-                  className="w-full transition-all duration-500 rounded-t"
-                  style={{ height: `${heightPct}%`, minHeight: '4px', background: 'linear-gradient(to top, #1e40af 0%, #3b82f6 100%)' }}
+            }
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={series} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+                <defs>
+                  <linearGradient id="incGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={CHART.negative} stopOpacity={0.22} />
+                    <stop offset="100%" stopColor={CHART.negative} stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke={CHART.grid} vertical={false} />
+                <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" minTickGap={18} />
+                <YAxis {...axisProps} allowDecimals={false} width={42} />
+                <Tooltip content={<ChartTooltip />} cursor={lineCursor} />
+                <Area
+                  type="monotone"
+                  name="Violations"
+                  dataKey="violations"
+                  stroke={CHART.negative}
+                  strokeWidth={2.5}
+                  fill="url(#incGradient)"
+                  activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff' }}
+                  animationDuration={700}
                 />
-                <div className="text-xs font-medium text-center text-gray-600">{item.day}</div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="flex items-center justify-center" style={{ height: '200px' }}>
-          <p className="text-sm text-gray-500">
-            {viewMode === 'custom' ? 'Please select a date range' : 'No data available'}
-          </p>
-        </div>
-      )}
-    </div>
+              </ComposedChart>
+            </ResponsiveContainer>
+          </DataState>
+        )}
+      </div>
+    </Card>
   );
 };
 
